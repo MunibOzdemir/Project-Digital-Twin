@@ -1,5 +1,6 @@
 # Add these imports to your existing notebook
 import json
+from zipfile import Path
 from PIL import Image
 import os
 import rasterio
@@ -8,16 +9,19 @@ import matplotlib.pyplot as plt
 import subprocess
 import shutil
 
-def export_for_web(tif_path, output_folder, geojson_path=None):
+def export_for_web(tif_path, output_folder=None, geojson_path=None):
     """
     Export satellite data and indices as web-compatible images with bounds
     """
 
+    current_dir = Path(__file__).resolve().parent
+    web_folder = current_dir.parent / 'web'
+
     # Ensure output folder exists
-    os.makedirs(output_folder, exist_ok=True)
+    os.makedirs(web_folder, exist_ok=True)
 
     # Step 1: Reproject TIFF to WGS84 using gdalwarp
-    tif_wgs84_path = os.path.join(output_folder, "reprojected.tif")
+    tif_wgs84_path = os.path.join(web_folder, "reprojected.tif")
     gdalwarp_cmd = [
         "gdalwarp",
         "-s_srs", "EPSG:28992",   # Assumes source is RD New
@@ -71,7 +75,7 @@ def export_for_web(tif_path, output_folder, geojson_path=None):
 
         # Save as RGBA PNG
         rgb_image = Image.fromarray(rgba_array, mode='RGBA')
-        rgb_path = os.path.join(output_folder, "satellite_rgb.png")
+        rgb_path = os.path.join(web_folder, "satellite_rgb.png")
         rgb_image.save(rgb_path)
 
         
@@ -84,7 +88,7 @@ def export_for_web(tif_path, output_folder, geojson_path=None):
         alpha_ndvi = (mask_ndvi * 255).astype(np.uint8)
         ndvi_rgba = np.dstack((ndvi_colored, alpha_ndvi))
         ndvi_image = Image.fromarray(ndvi_rgba.astype(np.uint8), mode='RGBA')
-        ndvi_path = os.path.join(output_folder, "ndvi.png")
+        ndvi_path = os.path.join(web_folder, "ndvi.png")
         ndvi_image.save(ndvi_path)
         
         # Calculate and export NDWI
@@ -96,7 +100,7 @@ def export_for_web(tif_path, output_folder, geojson_path=None):
         alpha_ndwi = (mask_ndwi * 255).astype(np.uint8)
         ndwi_rgba = np.dstack((ndwi_colored, alpha_ndwi))
         ndwi_image = Image.fromarray(ndwi_rgba.astype(np.uint8), mode='RGBA')
-        ndwi_path = os.path.join(output_folder, "ndwi.png")
+        ndwi_path = os.path.join(web_folder, "ndwi.png")
         ndwi_image.save(ndwi_path)
         
         # Create bounds info for JavaScript
@@ -121,11 +125,11 @@ def export_for_web(tif_path, output_folder, geojson_path=None):
             bounds_info["geojson_path"] = geojson_path
         
         # Save bounds info as JSON
-        bounds_path = os.path.join(output_folder, "bounds.json")
+        bounds_path = os.path.join(web_folder, "bounds.json")
         with open(bounds_path, 'w') as f:
             json.dump(bounds_info, f, indent=2)
-        
-        print(f"Exported images to: {output_folder}")
+
+        print(f"Exported images to: {web_folder}")
         print(f"Bounds: {bounds_info['satellite']['bounds']}")
         print("Image bounds:", bounds)
         print("Bounds for Leaflet:", [[bounds.bottom, bounds.left], [bounds.top, bounds.right]])

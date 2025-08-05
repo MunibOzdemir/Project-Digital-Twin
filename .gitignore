@@ -189,3 +189,7 @@ cython_debug/
 *.tif
 data/*.tiff
 data/*.tif
+
+# Local web app files
+#  These files are used for local web app visualization of RGB, NDVI, and NDWI values on a map.
+web/*
