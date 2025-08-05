@@ -183,3 +183,9 @@ cython_debug/
 # API keys and secrets
 #  It is recommended to not include API keys and secrets in version control.
 .env
+
+# TIFF files
+*.tiff
+*.tif
+data/*.tiff
+data/*.tif

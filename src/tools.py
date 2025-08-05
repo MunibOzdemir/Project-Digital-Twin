@@ -1,11 +1,14 @@
 from pathlib import Path
 
 def get_geojson_path(filename):
-    # Define the path to the JSON file
     current_dir = Path(__file__).resolve().parent
     data_file_path = current_dir.parent / 'data' / filename
-
-    return data_file_path
+    
+    if not data_file_path.exists():
+        raise FileNotFoundError(f"GeoJSON file '{filename}' not found at: {data_file_path}")
+   
+    print(f"GeoJSON file path: {data_file_path}")
+    return str(data_file_path)
 
 def get_tif_path(filename=None, ndvi=True):
     """
@@ -19,14 +22,19 @@ def get_tif_path(filename=None, ndvi=True):
 
     # If a specific filename is provided, return its path
     if filename:
-        return data_dir / filename
-    
+        return str(data_dir / filename)
+
     # If 'exclude_ndvi' is True, return a .tif file without 'ndvi' in its name
     if not ndvi:
         for file in data_dir.iterdir():
             if file.suffix.lower() == '.tif' and 'ndvi' not in file.name.lower():
-                return file
+                return str(file)
         raise FileNotFoundError("No .tif file without 'ndvi' in the name was found.")
     
-    # Default behavior: if ndvi=True, return 'ndvi.tif'
-    return data_dir / 'ndvi.tif'
+    # If ndvi=True, return a .tif file that contains 'ndvi' in its name
+    for file in data_dir.iterdir():
+        if file.suffix.lower() == '.tif' and 'ndvi' in file.name.lower():
+            return str(file)
+    
+    # If no 'ndvi' .tif file is found, raise an error
+    raise FileNotFoundError("No .tif file with 'ndvi' in the name was found.")
