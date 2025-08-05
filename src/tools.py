@@ -1,4 +1,31 @@
 from pathlib import Path
+import geopandas as gpd
+import os
+
+def convert_geojson_to_wgs84(filename, input_path=None, output_path=None):
+    """
+    Convert a GeoJSON file to WGS84 coordinate reference system (EPSG:4326).
+    """
+    current_dir = Path(__file__).resolve().parent
+    data_dir = current_dir.parent / 'data'
+    
+    # Load your geojson (with unknown CRS)
+    gdf = gpd.read_file(data_dir / filename)
+
+    if gdf.crs is None:
+        raise ValueError("No CRS found in the file.")
+
+    # Convert to WGS84 (EPSG:4326)
+    gdf_wgs84 = gdf.to_crs(epsg=4326)
+
+    if output_path is None:
+        base, ext = os.path.splitext(data_dir / filename)
+        output_path = f"{base}_wgs84{ext}"
+
+    # Save the new geojson file
+    gdf_wgs84.to_file(str(output_path), driver="GeoJSON")
+
+    print("Conversion complete, new file saved as:", output_path)
 
 def get_geojson_path(filename):
     current_dir = Path(__file__).resolve().parent
