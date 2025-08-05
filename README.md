@@ -21,7 +21,7 @@ All the packages and dependencies will have been installed automatically.
 
 2. Create a `.env` file in the root directory of the project with your own credentials:
 
-`API_USERNAME=your_username`
+`API_USERNAME=your_username`  
 `API_PASSWORD=your_password`
 
 
