@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Quality Satellite Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #map { height: 100vh; width: 100vw; }
+        .layer-control {
+            position: absolute; top: 10px; right: 10px; background: white;
+            padding: 15px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        .layer-control h3 { margin: 0 0 10px 0; font-size: 16px; }
+        .layer-option { margin: 5px 0; }
+        .layer-option input { margin-right: 8px; }
+        .opacity-slider { width: 100%; margin-top: 10px; }
+        .legend {
+            position: absolute; bottom: 20px; right: 20px; background: white;
+            padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000; display: none;
+        }
+        .legend-title { font-weight: bold; margin-bottom: 5px; }
+        .legend-item { display: flex; align-items: center; margin: 2px 0; }
+        .legend-color { width: 20px; height: 15px; margin-right: 5px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="layer-control">
+        <h3>Water Quality Layers</h3>
+        <div class="layer-option">
+            <input type="radio" id="satellite" name="layer" value="satellite" checked>
+            <label for="satellite">Satellite RGB</label>
+        </div>
+        <div class="layer-option">
+            <input type="radio" id="ndvi" name="layer" value="ndvi">
+            <label for="ndvi">NDVI</label>
+        </div>
+        <div class="layer-option">
+            <input type="radio" id="ndwi" name="layer" value="ndwi">
+            <label for="ndwi">NDWI (Water Quality)</label>
+        </div>
+        <div class="layer-option">
+            <label for="opacity">Opacity:</label>
+            <input type="range" id="opacity" class="opacity-slider" min="0" max="1" step="0.1" value="1">
+        </div>
+    </div>
+    
+    <div class="legend" id="legend">
+        <div class="legend-title">Water Quality Index</div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #8B4513;"></div>
+            <span>Poor (-1 to -0.5)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #DAA520;"></div>
+            <span>Fair (-0.5 to 0)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #9ACD32;"></div>
+            <span>Good (0 to 0.5)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #228B22;"></div>
+            <span>Excellent (0.5 to 1)</span>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        const map = L.map('map').setView([52.6316, 4.7482], 13);
+        const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        let currentOverlay = null;
+        const satelliteBounds = [[52.620, 4.730], [52.643, 4.767]];
+        
+        function createOverlayLayer(type, imagePath, bounds) {
+            return L.imageOverlay(imagePath, bounds, {
+                opacity: 1.0,
+                interactive: false,
+                crossOrigin: true
+            });
+
+        }
+        
+        let overlayData = {};
+        
+        function showStatus(message) {
+            console.log(message);
+            let statusDiv = document.getElementById('status');
+            if (!statusDiv) {
+                statusDiv = document.createElement('div');
+                statusDiv.id = 'status';
+                statusDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; z-index: 1001; max-width: 300px; font-size: 12px;';
+                document.body.appendChild(statusDiv);
+            }
+            statusDiv.innerHTML = message;
+        }
+        
+        showStatus('Loading bounds.json...');
+        
+        fetch('bounds.json')
+            .then(response => {
+                showStatus('bounds.json response received, parsing...');
+                return response.json();
+            })
+            .then(data => {
+                overlayData = data;
+                showStatus('Overlay data loaded successfully');
+                console.log('Loaded overlay data:', overlayData);
+                
+                if (overlayData.satellite) {
+                    const initialData = overlayData.satellite;
+                    showStatus(`Loading satellite image: ${initialData.path}<br>Bounds: ${JSON.stringify(initialData.bounds)}`);
+                    currentOverlay = createOverlayLayer('satellite', initialData.path, initialData.bounds);
+                    map.addLayer(currentOverlay);
+                    map.fitBounds(initialData.bounds);
+                    
+                    const testImg = new Image();
+                    testImg.onload = () => showStatus('✓ Satellite image loaded successfully');
+                    testImg.onerror = () => showStatus('✗ Error loading satellite image');
+                    testImg.src = initialData.path;
+                } else {
+                    showStatus('No satellite data found in bounds.json');
+                }
+            })
+            .catch(error => {
+                showStatus(`Error loading bounds.json: ${error.message}`);
+                console.error('Error loading bounds data:', error);
+            });
+        
+        document.querySelectorAll('input[name="layer"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (currentOverlay) {
+                    map.removeLayer(currentOverlay);
+                }
+                
+                const layerType = this.value;
+                const data = overlayData[layerType];
+                
+                if (data) {
+                    currentOverlay = createOverlayLayer(layerType, data.path, data.bounds);
+                    map.addLayer(currentOverlay);
+                    
+                    const legend = document.getElementById('legend');
+                    if (layerType === 'ndwi') {
+                        legend.style.display = 'block';
+                    } else {
+                        legend.style.display = 'none';
+                    }
+                }
+            });
+        });
+        
+        document.getElementById('opacity').addEventListener('input', function() {
+            if (currentOverlay) {
+                currentOverlay.setOpacity(this.value);
+            }
+        });
+        
+        map.on('click', function(e) {
+            console.log('Clicked coordinates:', e.latlng);
+        });
+    </script>
+</body>
+</html>
