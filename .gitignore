@@ -193,3 +193,8 @@ data/*.tif
 # Local web app files
 #  These files are used for local web app visualization of RGB, NDVI, and NDWI values on a map.
 web/*
+
+# Jupyter Notebook files
+# Jupyter Notebook files are often large and can contain sensitive information.
+# It is recommended to not include them in version control.
+*.ipynb

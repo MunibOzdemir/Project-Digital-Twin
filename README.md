@@ -28,3 +28,28 @@ All the packages and dependencies will have been installed automatically.
 3. **Note:** The `.env` file is ignored by Git, so your credentials won’t be accidentally pushed to GitHub.
 
 4. Run the project as usual. The credentials will be securely loaded from the `.env` file.
+
+## Steps for replacing .ipynb for .py
+
+1. Switch to your feature branch with
+
+`git checkout your-branch-name`
+
+2. Pull the latest change from main:
+
+`git pull origin main`
+
+After this there should be a .py file in src/
+
+3. Stop tracking the .ipynb file using
+
+`git rm --cached src/Project.ipynb`
+
+4. Commit the change
+
+If you want to convert your .ipynb file to .py, you can use jupytext:
+
+`pip install jupytext`
+`jupytext src/Project.ipynb --to py`
+
+Create a new cell in the Python file with `# %%`
