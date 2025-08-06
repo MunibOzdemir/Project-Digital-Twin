@@ -4,10 +4,35 @@ from pathlib import Path  # Fixed: was "from zipfile import Path"
 from PIL import Image
 import os
 import rasterio
+from rasterio.warp import calculate_default_transform, reproject, Resampling
+from rasterio.crs import CRS
 import numpy as np
 import matplotlib.pyplot as plt
 import subprocess
 import shutil
+
+def reproject_tiff(input_path, output_path, target_crs='EPSG:4326'):
+    """Reproject a TIFF file using rasterio instead of gdalwarp"""
+    with rasterio.open(input_path) as src:
+        transform, width, height = calculate_default_transform(
+            src.crs, target_crs, src.width, src.height, *src.bounds)
+        kwargs = src.meta.copy()
+        kwargs.update({
+            'crs': target_crs,
+            'transform': transform,
+            'width': width,
+            'height': height
+        })
+        with rasterio.open(output_path, 'w', **kwargs) as dst:
+            for i in range(1, src.count + 1):
+                reproject(
+                    source=rasterio.band(src, i),
+                    destination=rasterio.band(dst, i),
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=target_crs,
+                    resampling=Resampling.nearest)
 
 def export_for_web(tif_path, geojson_path=None):
     """
@@ -20,21 +45,14 @@ def export_for_web(tif_path, geojson_path=None):
     # Ensure output folder exists
     os.makedirs(web_folder, exist_ok=True)
 
-    # Step 1: Reproject TIFF to WGS84 using gdalwarp
+    # Step 1: Reproject TIFF to WGS84 using rasterio instead of gdalwarp
     tif_wgs84_path = os.path.join(web_folder, "reprojected.tif")
-    gdalwarp_cmd = [
-        "gdalwarp",
-        "-s_srs", "EPSG:28992",   # Assumes source is RD New
-        "-t_srs", "EPSG:4326",    # Target WGS84
-        tif_path,
-        tif_wgs84_path
-    ]
-
+    
     try:
-        subprocess.run(gdalwarp_cmd, check=True)
-        print("✅ gdalwarp: Reprojection successful.")
-    except subprocess.CalledProcessError as e:
-        print("❌ Error running gdalwarp:", e)
+        reproject_tiff(tif_path, tif_wgs84_path, target_crs='EPSG:4326')
+        print("✅ rasterio: Reprojection successful.")
+    except Exception as e:
+        print(f"❌ Error running rasterio reprojection: {e}")
         return
 
     # Read GeoJSON if provided
