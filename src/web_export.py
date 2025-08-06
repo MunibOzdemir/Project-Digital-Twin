@@ -1,6 +1,6 @@
 # Add these imports to your existing notebook
 import json
-from zipfile import Path
+from pathlib import Path  # Fixed: was "from zipfile import Path"
 from PIL import Image
 import os
 import rasterio
@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import subprocess
 import shutil
 
-def export_for_web(tif_path, output_folder=None, geojson_path=None):
+def export_for_web(tif_path, geojson_path=None):
     """
     Export satellite data and indices as web-compatible images with bounds
     """
@@ -160,6 +160,12 @@ def create_simple_server(web_folder=None, port=8000):
     class Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=web_folder, **kwargs)
+        
+        def log_message(self, format, *args):
+            # Suppress favicon 404 errors in logs
+            if "favicon.ico" in args[0] and "404" in args[1]:
+                return
+            super().log_message(format, *args)
     
     def start_server():
         with socketserver.TCPServer(("", port), Handler) as httpd:
