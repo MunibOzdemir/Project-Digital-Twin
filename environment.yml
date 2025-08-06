@@ -146,4 +146,3 @@ dependencies:
       - shapely==2.1.1
       - tifffile==2025.6.11
       - tqdm==4.67.1
-prefix: C:\Users\munib\anaconda3\envs\satellite
