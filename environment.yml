@@ -1,4 +1,4 @@
-name: satellite_nso_test_env
+name: satellite_nso
 channels:
   - conda-forge
   - defaults
@@ -41,3 +41,4 @@ dependencies:
       - pillow
       - fiona
       - pyproj
+      - jupytext
