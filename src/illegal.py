@@ -1,4 +1,9 @@
 
+from rasterio.warp import reproject, Resampling
+
+import numpy as np
+import rasterio
+
 def detect_visual_changes_proper(path1, path2):
     """
     Better approach using proper geospatial alignment

@@ -1,9 +1,8 @@
 from pathlib import Path
 import geopandas as gpd
 import os
-import numpy as np
-import rasterio
-from rasterio.warp import reproject, Resampling
+
+
 
 
 def convert_geojson_to_wgs84(filename, input_path=None, output_path=None):
