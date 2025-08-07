@@ -2,6 +2,9 @@ from pathlib import Path
 import geopandas as gpd
 import os
 
+
+
+
 def convert_geojson_to_wgs84(filename, input_path=None, output_path=None):
     """
     Convert a GeoJSON file to WGS84 coordinate reference system (EPSG:4326).
@@ -65,3 +68,4 @@ def get_tif_path(filename=None, ndvi=True):
     
     # If no 'ndvi' .tif file is found, raise an error
     raise FileNotFoundError("No .tif file with 'ndvi' in the name was found.")
+

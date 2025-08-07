@@ -11,6 +11,79 @@ import matplotlib.pyplot as plt
 import subprocess
 import shutil
 
+def detect_visual_changes_proper(path1, path2):
+    """
+    Better approach using proper geospatial alignment
+    """
+    with rasterio.open(path1) as src1, rasterio.open(path2) as src2:
+        # Check if they have the same CRS and extent
+        if src1.crs != src2.crs or src1.bounds != src2.bounds or src1.shape != src2.shape:
+            print("Reprojecting to align images properly...")
+            
+            # Create array to hold reprojected data
+            aligned_data = np.empty((src2.count, src1.height, src1.width), dtype=src2.dtypes[0])
+            
+            # Reproject src2 to match src1's grid
+            reproject(
+                source=rasterio.band(src2, [1, 2, 3]),  # RGB bands
+                destination=aligned_data,
+                src_transform=src2.transform,
+                src_crs=src2.crs,
+                dst_transform=src1.transform,
+                dst_crs=src1.crs,
+                resampling=Resampling.bilinear
+            )
+            
+            # Now both images are properly aligned
+            red1 = src1.read(3).astype(np.float32)
+            green1 = src1.read(2).astype(np.float32)
+            blue1 = src1.read(1).astype(np.float32)
+            
+            red2 = aligned_data[2]  # Band 3 (red)
+            green2 = aligned_data[1]  # Band 2 (green)
+            blue2 = aligned_data[0]  # Band 1 (blue)
+        else:
+             # Images already aligned
+            red1 = src1.read(3).astype(np.float32)
+            green1 = src1.read(2).astype(np.float32)
+            blue1 = src1.read(1).astype(np.float32)
+            
+            red2 = src2.read(3).astype(np.float32)
+            green2 = src2.read(2).astype(np.float32)
+            blue2 = src2.read(1).astype(np.float32)
+
+        # Normalize and calculate changes
+        red1_norm = normalize(red1)
+        green1_norm = normalize(green1)
+        blue1_norm = normalize(blue1)
+        
+        red2_norm = normalize(red2)
+        green2_norm = normalize(green2)
+        blue2_norm = normalize(blue2)
+        
+        # Calculate differences
+        red_diff = red2_norm - red1_norm
+        green_diff = green2_norm - green1_norm
+        blue_diff = blue2_norm - blue1_norm
+        
+        # Overall change magnitude
+        change_magnitude = np.sqrt(red_diff**2 + green_diff**2 + blue_diff**2)
+        
+        # Return everything needed for plotting
+        return {
+            'red1_norm': red1_norm,
+            'green1_norm': green1_norm,
+            'blue1_norm': blue1_norm,
+            'red2_norm': red2_norm,
+            'green2_norm': green2_norm,
+            'blue2_norm': blue2_norm,
+            'change_magnitude': change_magnitude
+        }
+
+# Simple normalization
+def normalize(band):
+    return (band - band.min()) / (band.max() - band.min() + 1e-10)
+
 def reproject_tiff(input_path, output_path, target_crs='EPSG:4326'):
     """Reproject a TIFF file using rasterio instead of gdalwarp"""
     with rasterio.open(input_path) as src:
@@ -34,9 +107,10 @@ def reproject_tiff(input_path, output_path, target_crs='EPSG:4326'):
                     dst_crs=target_crs,
                     resampling=Resampling.nearest)
 
-def export_for_web(tif_path, geojson_path=None):
+def export_for_web(tif_path, geojson_path=None, tif_path_2=None):
     """
     Export satellite data and indices as web-compatible images with bounds
+    If tif_path_2 is provided, also generate change detection layer
     """
 
     current_dir = Path(__file__).resolve().parent
@@ -45,7 +119,7 @@ def export_for_web(tif_path, geojson_path=None):
     # Ensure output folder exists
     os.makedirs(web_folder, exist_ok=True)
 
-    # Step 1: Reproject TIFF to WGS84 using rasterio instead of gdalwarp
+    # Step 1: Reproject primary TIFF to WGS84 using rasterio instead of gdalwarp
     tif_wgs84_path = os.path.join(web_folder, "reprojected.tif")
     
     try:
@@ -97,7 +171,7 @@ def export_for_web(tif_path, geojson_path=None):
         rgb_image.save(rgb_path)
 
         
-        # Calculate and export NDVI
+        # Calculate and export NDVI (only for primary image)
         ndvi = (nir - red) / (nir + red + 1e-10)
         ndvi_norm = ((ndvi + 1) / 2 * 255).astype(np.uint8)  # Normalize -1,1 to 0,255
         ndvi_colored = plt.cm.RdYlGn(ndvi_norm)[:,:,:3] * 255
@@ -109,7 +183,7 @@ def export_for_web(tif_path, geojson_path=None):
         ndvi_path = os.path.join(web_folder, "ndvi.png")
         ndvi_image.save(ndvi_path)
         
-        # Calculate and export NDWI
+        # Calculate and export NDWI (only for primary image)
         ndwi = (green - nir) / (green + nir + 1e-10)
         ndwi_norm = ((ndwi + 1) / 2 * 255).astype(np.uint8)  # Normalize -1,1 to 0,255
         ndwi_colored = plt.cm.BrBG(ndwi_norm)[:,:,:3] * 255
@@ -121,7 +195,7 @@ def export_for_web(tif_path, geojson_path=None):
         ndwi_path = os.path.join(web_folder, "ndwi.png")
         ndwi_image.save(ndwi_path)
         
-        # Create bounds info for JavaScript
+        # Initialize bounds info
         bounds_info = {
             "satellite": {
                 "path": "satellite_rgb.png",
@@ -136,6 +210,42 @@ def export_for_web(tif_path, geojson_path=None):
                 "bounds": [[bounds.bottom, bounds.left], [bounds.top, bounds.right]]
             }
         }
+        
+        # If second TIFF is provided, generate change detection layer
+        if tif_path_2:
+            print("Generating change detection layer...")
+            change_data = detect_visual_changes_proper(tif_path, tif_path_2)
+            
+            # Export change detection as image
+            change_magnitude = change_data['change_magnitude']
+            
+            # Normalize change magnitude to 0-255
+            change_norm = ((change_magnitude / change_magnitude.max()) * 255).astype(np.uint8)
+            
+            # Apply red colormap
+            change_colored = plt.cm.Reds(change_norm)[:,:,:3] * 255
+            
+            # Create transparency mask (threshold for visibility)
+            alpha_change = (change_magnitude > 0.01).astype(np.uint8) * 255
+            
+            # Create RGBA image
+            change_rgba = np.dstack((change_colored, alpha_change))
+            
+            # Save change detection image
+            change_image = Image.fromarray(change_rgba.astype(np.uint8), mode='RGBA')
+            change_path = os.path.join(web_folder, "change_detection.png")
+            change_image.save(change_path)
+            
+            # Add to bounds info
+            bounds_info["change_detection"] = {
+                "path": "change_detection.png",
+                "bounds": [[bounds.bottom, bounds.left], [bounds.top, bounds.right]]
+            }
+            
+            print("✅ Change detection layer created.")
+        
+        # Create bounds info for JavaScript
+        # bounds_info was already initialized above
         
         # Add GeoJSON boundary if available
         if geojson_bounds:
