@@ -198,3 +198,22 @@ web/*
 # Jupyter Notebook files are often large and can contain sensitive information.
 # It is recommended to not include them in version control.
 *.ipynb
+
+# Jupyter Notebook checkpoints
+# Jupyter Notebook checkpoints are temporary files created by Jupyter to save the state of a notebook
+*.ipynb_checkpoints
+
+# macOS specific files
+# macOS creates .DS_Store files in directories to store custom attributes of a folder
+*.DS_Store
+
+# Geopackage files
+# Geopackage files are used for storing geospatial data and can be large.
+*.gpkg
+
+# PNG files
+*.png
+
+# GML files
+# GML files are used for storing geospatial data and can be large.
+*.gml
