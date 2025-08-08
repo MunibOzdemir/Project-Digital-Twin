@@ -4,9 +4,14 @@ from rasterio.warp import reproject, Resampling
 import numpy as np
 import rasterio
 
-def detect_visual_changes_proper(path1, path2):
+from rasterio.warp import reproject, Resampling
+
+import numpy as np
+import rasterio
+
+def detect_visual_changes_proper(path1, path2, threshold=0.14):
     """
-    Better approach using proper geospatial alignment
+    Better approach using proper geospatial alignment with threshold
     """
     with rasterio.open(path1) as src1, rasterio.open(path2) as src2:
         # Check if they have the same CRS and extent
@@ -62,6 +67,20 @@ def detect_visual_changes_proper(path1, path2):
         # Overall change magnitude
         change_magnitude = np.sqrt(red_diff**2 + green_diff**2 + blue_diff**2)
         
+        # Apply threshold - set values below threshold to 0
+        change_magnitude_thresholded = change_magnitude.copy()
+        change_magnitude_thresholded[change_magnitude_thresholded < threshold] = 0
+        
+        # Print statistics
+        total_pixels = change_magnitude.size
+        changed_pixels = (change_magnitude_thresholded > 0).sum()
+        percentage_changed = (changed_pixels / total_pixels) * 100
+        
+        print(f"Threshold applied: {threshold}")
+        print(f"Pixels above threshold: {changed_pixels:,} ({percentage_changed:.2f}% of image)")
+        print(f"Average change magnitude: {change_magnitude.mean():.4f}")
+        print(f"Max change magnitude: {change_magnitude.max():.4f}")
+        
         # Return everything needed for plotting
         return {
             'red1_norm': red1_norm,
@@ -70,7 +89,9 @@ def detect_visual_changes_proper(path1, path2):
             'red2_norm': red2_norm,
             'green2_norm': green2_norm,
             'blue2_norm': blue2_norm,
-            'change_magnitude': change_magnitude
+            'change_magnitude': change_magnitude,
+            'change_magnitude_thresholded': change_magnitude_thresholded,
+            'threshold': threshold
         }
 
 # Simple normalization
