@@ -124,3 +124,11 @@ def fetch_s2(
 
     # Schaal de 0–255 waarden naar 0.0–1.0 floats voor verdere berekening
     return arr.astype(np.float32) / 255.0
+
+
+# --- Hulpfuncties voor specifieke doelen ---
+def fetch_true_color(start_iso, end_iso):
+    """
+    Haalt true-color (RGB) beeld op: B04 (rood), B03 (groen), B02 (blauw).
+    """
+    return fetch_s2(["B04", "B03", "B02"], start_iso, end_iso)
