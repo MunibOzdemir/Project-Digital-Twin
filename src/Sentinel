@@ -47,3 +47,80 @@ def get_token():
 # Haal token eenmaal op en bouw headers met Authorization
 token = get_token()
 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+# --- Generieke functie om Sentinel-2 data te fetchen voor willekeurige banden ---
+def fetch_s2(
+    bands,
+    start_iso,
+    end_iso,
+    width=512,
+    height=512,
+    max_cloud=MAX_CLOUD,
+    mosaicking_order="leastCC",
+):
+    """
+    Haalt pixelreflecties op voor opgegeven 'bands' in de opgegeven tijdsperiode.
+    bands         : lijst van band-namen (bijv. ["B04","B03","B02"])
+    start_iso     : ISO-tijdstring beginperiode
+    end_iso       : ISO-tijdstring eindperiode
+    width, height : resolutie van het beeld in pixels
+    max_cloud     : maximum toegestane wolkendekking (%)
+    mosaicking_order: 'leastCC' of 'mostRecent'
+
+    Returned een NumPy-array shape=(h, w, len(bands)), dtype=float32, waarden [0,1].
+    """
+    # Bouw het evalscript dynamisch om precies de gevraagde bands terug te krijgen
+    evalscript = f"""
+    //VERSION=3
+    function setup() {{
+      return {{
+        input: {bands},
+        output: {{ bands: {len(bands)} }}
+      }};
+    }}
+    function evaluatePixel(sample) {{
+      return [{', '.join(f"sample.{b}" for b in bands)}];
+    }}
+    """
+
+    # Payload met bounds, tijdsfilter en processing-opties
+    payload = {
+        "input": {
+            "bounds": {
+                "geometry": geom,
+                "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"},
+            },
+            "data": [
+                {
+                    "type": "S2L2A",  # Sentinel-2 Level-2A producten
+                    "dataFilter": {
+                        "timeRange": {"from": start_iso, "to": end_iso},
+                        "maxCloudCoverage": max_cloud,
+                    },
+                    "processing": {"mosaickingOrder": mosaicking_order},
+                }
+            ],
+        },
+        "evalscript": evalscript,
+        "output": {
+            "width": width,
+            "height": height,
+            "responses": [{"identifier": "default", "format": {"type": "image/png"}}],
+        },
+    }
+
+    # Verstuur request, krijg PNG terug als bytes
+    r = requests.post(PROCESS_URL, headers=headers, json=payload)
+    r.raise_for_status()
+
+    # Open de PNG in geheugen en zet om naar NumPy-array
+    img = Image.open(BytesIO(r.content))
+    arr = np.array(img, dtype=np.uint8)
+
+    # Sommige PNG's bevatten een alpha-kanaal, hier strips we dat weg
+    if arr.ndim == 3 and arr.shape[2] > len(bands):
+        arr = arr[..., : len(bands)]
+
+    # Schaal de 0–255 waarden naar 0.0–1.0 floats voor verdere berekening
+    return arr.astype(np.float32) / 255.0
