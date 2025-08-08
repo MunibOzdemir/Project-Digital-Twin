@@ -1,36 +1,37 @@
 # %%
-import requests  # HTTP-verzoeken sturen naar Sentinel Hub API
-import json  # GeoJSON-bestand inlezen als Python-dict
-import numpy as np  # Numerieke berekeningen en array-manipulatie
-from io import BytesIO  # BytesIO om binair beeldmateriaal in geheugen te laden
-from PIL import Image  # Image openen en converteren naar NumPy-array
-import matplotlib.pyplot as plt  # Visualisaties maken
-from datetime import datetime, timedelta  # Datums manipuleren
+import requests  # Send HTTP requests to Sentinel Hub API
+import json  # Read GeoJSON file as a Python dict
+import numpy as np  # Numerical calculations and array manipulation
+from io import BytesIO  # Use BytesIO to load binary image data into memory
+from PIL import Image  # Open image and convert to NumPy array
+import matplotlib.pyplot as plt  # Create visualizations
+from datetime import datetime, timedelta  # Manipulate dates
 
-# --- Configuratie & credentials ---
+# --- Configuration & credentials ---
 CLIENT_ID = "sh-93c6fbd0-8c4a-4e40-8c59-d06889413797"
 CLIENT_SECRET = "LKVq6MTE0S3kohQjRI1Yuj03aU5frOTm"
 TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
 
-# Pad naar je GeoJSON-bestand met gebied van interesse
+# Path to your GeoJSON file with area of interest
 GEOJSON_PATH = "../data/alkmaar.geojson"
 
-# Maximale wolkendekking in procenten (stel gerust hoger in bij weinig beelden)
+# Maximum cloud coverage in percent (feel free to raise if imagery is limited)
 MAX_CLOUD = 1
 
-# --- GeoJSON inlezen en juiste geometrie extracten ---
+# --- Read GeoJSON and extract correct geometry ---
 with open(GEOJSON_PATH) as f:
     gj = json.load(f)
-# Indien 'features' key bestaat, pak de eerste feature; anders direct geometry of hele object
+
+# If 'features' key exists, take the first feature; otherwise use direct geometry or whole object
 geom = gj["features"][0]["geometry"] if "features" in gj else gj.get("geometry", gj)
 
 
-# --- Functie om toegangstoken te verkrijgen bij Sentinel Hub ---
+# --- Function to get access token from Sentinel Hub ---
 def get_token():
     """
-    Authenticeert met client_credentials grant.
-    Returned een bearer token voor verdere API-aanroepen.
+    Authenticate using client_credentials grant.
+    Returns a bearer token for further API calls.
     """
     r = requests.post(
         TOKEN_URL,
@@ -40,16 +41,16 @@ def get_token():
             "client_secret": CLIENT_SECRET,
         },
     )
-    r.raise_for_status()  # Stop bij foutstatus
+    r.raise_for_status()  # Raise error if response is not OK
     return r.json()["access_token"]
 
 
-# Haal token eenmaal op en bouw headers met Authorization
+# Fetch token once and build headers with Authorization
 token = get_token()
 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
-# --- Generieke functie om Sentinel-2 data te fetchen voor willekeurige banden ---
+# --- Generic function to fetch Sentinel-2 data for any bands ---
 def fetch_s2(
     bands,
     start_iso,
@@ -60,17 +61,17 @@ def fetch_s2(
     mosaicking_order="leastCC",
 ):
     """
-    Haalt pixelreflecties op voor opgegeven 'bands' in de opgegeven tijdsperiode.
-    bands         : lijst van band-namen (bijv. ["B04","B03","B02"])
-    start_iso     : ISO-tijdstring beginperiode
-    end_iso       : ISO-tijdstring eindperiode
-    width, height : resolutie van het beeld in pixels
-    max_cloud     : maximum toegestane wolkendekking (%)
-    mosaicking_order: 'leastCC' of 'mostRecent'
+    Fetch pixel reflectance values for specified bands over the given time period.
+    bands         : list of band names (e.g. ["B04","B03","B02"])
+    start_iso     : ISO date string for start of period
+    end_iso       : ISO date string for end of period
+    width, height : resolution of the image in pixels
+    max_cloud     : maximum allowed cloud coverage (%)
+    mosaicking_order: 'leastCC' or 'mostRecent'
 
-    Returned een NumPy-array shape=(h, w, len(bands)), dtype=float32, waarden [0,1].
+    Returns a NumPy array of shape=(h, w, len(bands)), dtype=float32, values [0,1].
     """
-    # Bouw het evalscript dynamisch om precies de gevraagde bands terug te krijgen
+    # Dynamically build the evalscript to retrieve only the requested bands
     evalscript = f"""
     //VERSION=3
     function setup() {{
@@ -84,7 +85,7 @@ def fetch_s2(
     }}
     """
 
-    # Payload met bounds, tijdsfilter en processing-opties
+    # Payload with geometry bounds, date filter, and processing options
     payload = {
         "input": {
             "bounds": {
@@ -93,7 +94,7 @@ def fetch_s2(
             },
             "data": [
                 {
-                    "type": "S2L2A",  # Sentinel-2 Level-2A producten
+                    "type": "S2L2A",  # Sentinel-2 Level-2A products
                     "dataFilter": {
                         "timeRange": {"from": start_iso, "to": end_iso},
                         "maxCloudCoverage": max_cloud,
@@ -110,86 +111,86 @@ def fetch_s2(
         },
     }
 
-    # Verstuur request, krijg PNG terug als bytes
+    # Send request, get PNG image back as bytes
     r = requests.post(PROCESS_URL, headers=headers, json=payload)
     r.raise_for_status()
 
-    # Open de PNG in geheugen en zet om naar NumPy-array
+    # Open the PNG in memory and convert to NumPy array
     img = Image.open(BytesIO(r.content))
     arr = np.array(img, dtype=np.uint8)
 
-    # Sommige PNG's bevatten een alpha-kanaal, hier strips we dat weg
+    # Some PNGs include an alpha channel, we strip it here
     if arr.ndim == 3 and arr.shape[2] > len(bands):
         arr = arr[..., : len(bands)]
 
-    # Schaal de 0–255 waarden naar 0.0–1.0 floats voor verdere berekening
+    # Scale 0–255 values to 0.0–1.0 floats for further processing
     return arr.astype(np.float32) / 255.0
 
 
-# --- Hulpfuncties voor specifieke doelen ---
+# --- Helper functions for specific products ---
 def fetch_true_color(start_iso, end_iso):
     """
-    Haalt true-color (RGB) beeld op: B04 (rood), B03 (groen), B02 (blauw).
+    Fetch true-color (RGB) image: B04 (red), B03 (green), B02 (blue).
     """
     return fetch_s2(["B04", "B03", "B02"], start_iso, end_iso)
 
 
 def fetch_ndci(start_iso, end_iso):
     """
-    Bereken de Normalized Difference Chlorophyll Index:
+    Compute the Normalized Difference Chlorophyll Index:
       NDCI = (B05 - B04) / (B05 + B04)
-    B05 = red-edge band (kanaal 0), B04 = rood (kanaal 1).
+    B05 = red-edge band (channel 0), B04 = red (channel 1).
     """
     arr = fetch_s2(["B05", "B04"], start_iso, end_iso)
     b5, b4 = arr[..., 0], arr[..., 1]
-    # Voeg klein getal toe om delen door nul te voorkomen
+    # Add small value to denominator to prevent division by zero
     return (b5 - b4) / (b5 + b4 + 1e-6)
 
 
-# --- 1) True-color visualisatie voor exact twee periodes ---
+# --- 1) True-color visualization for exactly two periods ---
 dates_tc = {
-    "Mei 2024": ("2024-05-01T00:00:00Z", "2024-05-31T23:59:59Z"),
+    "May 2024": ("2024-05-01T00:00:00Z", "2024-05-31T23:59:59Z"),
     "April 2025": ("2025-04-01T00:00:00Z", "2025-04-30T23:59:59Z"),
 }
 
-# Haal beide RGB-beelden op en bewaar in dict
+# Fetch both RGB images and store in a dictionary
 tc_maps = {
     label: fetch_true_color(start, end) for label, (start, end) in dates_tc.items()
 }
 
-# Plotten in één rij van 2 subplots
+# Plot in a single row with 2 subplots
 fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 for ax, (label, img) in zip(axes, tc_maps.items()):
     ax.imshow(img)
     ax.set_title(f"True-color {label}")
-    ax.axis("off")  # geen assen tonen voor overzichtelijkheid
+    ax.axis("off")  # hide axes for cleaner look
 
 plt.tight_layout()
 plt.show()
 
-# --- 2) Berekening en visualisatie van NDCI en ΔNDCI ---
-# Zelfde periodes als true-color voor consistente vergelijking
+# --- 2) Compute and visualize NDCI and ΔNDCI ---
+# Use same periods as true-color for consistent comparison
 dates_ndci = dates_tc
 
-# Haal NDCI-kaarten op
+# Fetch NDCI maps
 ndci_maps = {
     label: fetch_ndci(start, end) for label, (start, end) in dates_ndci.items()
 }
 
-# Bereken verschil tussen April 2025 en Mei 2024
-delta_ndci = ndci_maps["April 2025"] - ndci_maps["Mei 2024"]
+# Compute difference between April 2025 and May 2024
+delta_ndci = ndci_maps["April 2025"] - ndci_maps["May 2024"]
 
-# Maak 3 subplots: NDCI Mei 2024, NDCI April 2025, én Δ NDCI
+# Create 3 subplots: NDCI May 2024, NDCI April 2025, and ΔNDCI
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
-# Definieer plotinstellingen voor elke as
+# Define plotting settings for each axis
 settings = [
-    (ndci_maps["Mei 2024"], "NDCI Mei 2024", "Spectral", (-1, 1)),
+    (ndci_maps["May 2024"], "NDCI May 2024", "Spectral", (-1, 1)),
     (ndci_maps["April 2025"], "NDCI April 2025", "Spectral", (-1, 1)),
     (delta_ndci, "Δ NDCI", "RdBu", (-1, 1)),
 ]
 
-# Plot alle drie, en bewaar de imshow-handles voor colorbar
+# Plot all three and store the imshow handles for colorbar
 im_handles = []
 for ax, (data, title, cmap, vlim) in zip(axes, settings):
     im = ax.imshow(data, cmap=cmap, vmin=vlim[0], vmax=vlim[1])
@@ -197,7 +198,7 @@ for ax, (data, title, cmap, vlim) in zip(axes, settings):
     ax.axis("off")
     im_handles.append(im)
 
-# Voeg één colorbar toe bij ΔNDCI-plot (rechter subplot)
+# Add one colorbar to the ΔNDCI plot (right subplot)
 fig.colorbar(im_handles[-1], ax=axes[-1], shrink=0.7)
 
 plt.tight_layout()
