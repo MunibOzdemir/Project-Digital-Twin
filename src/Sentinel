@@ -1,0 +1,49 @@
+# %%
+import requests  # HTTP-verzoeken sturen naar Sentinel Hub API
+import json  # GeoJSON-bestand inlezen als Python-dict
+import numpy as np  # Numerieke berekeningen en array-manipulatie
+from io import BytesIO  # BytesIO om binair beeldmateriaal in geheugen te laden
+from PIL import Image  # Image openen en converteren naar NumPy-array
+import matplotlib.pyplot as plt  # Visualisaties maken
+from datetime import datetime, timedelta  # Datums manipuleren
+
+# --- Configuratie & credentials ---
+CLIENT_ID = "sh-93c6fbd0-8c4a-4e40-8c59-d06889413797"
+CLIENT_SECRET = "LKVq6MTE0S3kohQjRI1Yuj03aU5frOTm"
+TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
+
+# Pad naar je GeoJSON-bestand met gebied van interesse
+GEOJSON_PATH = "../data/alkmaar.geojson"
+
+# Maximale wolkendekking in procenten (stel gerust hoger in bij weinig beelden)
+MAX_CLOUD = 1
+
+# --- GeoJSON inlezen en juiste geometrie extracten ---
+with open(GEOJSON_PATH) as f:
+    gj = json.load(f)
+# Indien 'features' key bestaat, pak de eerste feature; anders direct geometry of hele object
+geom = gj["features"][0]["geometry"] if "features" in gj else gj.get("geometry", gj)
+
+
+# --- Functie om toegangstoken te verkrijgen bij Sentinel Hub ---
+def get_token():
+    """
+    Authenticeert met client_credentials grant.
+    Returned een bearer token voor verdere API-aanroepen.
+    """
+    r = requests.post(
+        TOKEN_URL,
+        data={
+            "grant_type": "client_credentials",
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+        },
+    )
+    r.raise_for_status()  # Stop bij foutstatus
+    return r.json()["access_token"]
+
+
+# Haal token eenmaal op en bouw headers met Authorization
+token = get_token()
+headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
