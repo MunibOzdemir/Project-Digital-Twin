@@ -132,3 +132,15 @@ def fetch_true_color(start_iso, end_iso):
     Haalt true-color (RGB) beeld op: B04 (rood), B03 (groen), B02 (blauw).
     """
     return fetch_s2(["B04", "B03", "B02"], start_iso, end_iso)
+
+
+def fetch_ndci(start_iso, end_iso):
+    """
+    Bereken de Normalized Difference Chlorophyll Index:
+      NDCI = (B05 - B04) / (B05 + B04)
+    B05 = red-edge band (kanaal 0), B04 = rood (kanaal 1).
+    """
+    arr = fetch_s2(["B05", "B04"], start_iso, end_iso)
+    b5, b4 = arr[..., 0], arr[..., 1]
+    # Voeg klein getal toe om delen door nul te voorkomen
+    return (b5 - b4) / (b5 + b4 + 1e-6)
