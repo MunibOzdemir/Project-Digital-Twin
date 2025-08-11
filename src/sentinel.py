@@ -6,6 +6,11 @@ from io import BytesIO  # Use BytesIO to load binary image data into memory
 from PIL import Image  # Open image and convert to NumPy array
 import matplotlib.pyplot as plt  # Create visualizations
 from datetime import datetime, timedelta  # Manipulate dates
+import geopandas as gpd  # For handling GeoJSON data
+from rasterio.features import rasterize  # For converting vector to raster
+from rasterio.transform import from_bounds  # For creating geospatial transforms
+import pandas as pd  # For data manipulation and analysis
+from dateutil.relativedelta import relativedelta  # For month calculations
 
 # --- Configuration & credentials ---
 CLIENT_ID = "sh-93c6fbd0-8c4a-4e40-8c59-d06889413797"
@@ -13,8 +18,9 @@ CLIENT_SECRET = "LKVq6MTE0S3kohQjRI1Yuj03aU5frOTm"
 TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
 
-# Path to your GeoJSON file with area of interest
+# Path to your GeoJSON files
 GEOJSON_PATH = "../data/alkmaar.geojson"
+SURFACE_WATER_PATH = "../data/surface_water.geojson"
 
 # Maximum cloud coverage in percent (feel free to raise if imagery is limited)
 MAX_CLOUD = 1
@@ -25,6 +31,30 @@ with open(GEOJSON_PATH) as f:
 
 # If 'features' key exists, take the first feature; otherwise use direct geometry or whole object
 geom = gj["features"][0]["geometry"] if "features" in gj else gj.get("geometry", gj)
+
+
+# --- Load surface water bodies ---
+def load_surface_water_mask():
+    """
+    Load surface water GeoJSON and prepare it for masking.
+    Returns GeoDataFrame with water body geometries.
+    """
+    try:
+        water_gdf = gpd.read_file(SURFACE_WATER_PATH)
+        # Ensure CRS is WGS84 (EPSG:4326) to match Sentinel Hub data
+        if water_gdf.crs != "EPSG:4326":
+            water_gdf = water_gdf.to_crs("EPSG:4326")
+        return water_gdf
+    except FileNotFoundError:
+        print(f"Surface water file not found at {SURFACE_WATER_PATH}")
+        return None
+    except Exception as e:
+        print(f"Error loading surface water data: {e}")
+        return None
+
+
+# Load water bodies once
+water_bodies = load_surface_water_mask()
 
 
 # --- Function to get access token from Sentinel Hub ---
