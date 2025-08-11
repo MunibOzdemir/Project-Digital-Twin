@@ -80,28 +80,143 @@ token = get_token()
 headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
-# --- Generic function to fetch Sentinel-2 data for any bands ---
-def fetch_s2(
-    bands,
-    start_iso,
-    end_iso,
-    width=512,
-    height=512,
-    max_cloud=MAX_CLOUD,
+# %%
+# --- Function to create water mask ---
+def create_water_mask(image_shape, bounds, water_gdf):
+    """
+    Create a binary mask for water bodies.
+
+    Args:
+        image_shape: tuple (height, width) of the target image
+        bounds: tuple (minx, miny, maxx, maxy) in EPSG:4326
+        water_gdf: GeoDataFrame containing water body polygons
+
+    Returns:
+        Binary mask array where 1 = water, 0 = land
+    """
+    if water_gdf is None or water_gdf.empty:
+        return np.ones(image_shape, dtype=bool)  # Return all True (no masking)
+
+    # Create transform from bounds to image coordinates
+    height, width = image_shape
+    minx, miny, maxx, maxy = bounds
+    transform = from_bounds(minx, miny, maxx, maxy, width, height)
+
+    # Rasterize water body polygons
+    water_mask = rasterize(
+        [(geom, 1) for geom in water_gdf.geometry],
+        out_shape=image_shape,
+        transform=transform,
+        fill=0,
+        dtype="uint8",
+    )
+
+    return water_mask.astype(bool)
+
+
+# --- Function to get image bounds from geometry ---
+def get_bounds_from_geometry(geometry):
+    """Extract bounding box from GeoJSON geometry."""
+    if geometry["type"] == "Polygon":
+        coords = geometry["coordinates"][0]
+    elif geometry["type"] == "MultiPolygon":
+        # Get all coordinates and flatten
+        coords = []
+        for poly in geometry["coordinates"]:
+            coords.extend(poly[0])
+    else:
+        raise ValueError(f"Unsupported geometry type: {geometry['type']}")
+
+    lons = [coord[0] for coord in coords]
+    lats = [coord[1] for coord in coords]
+
+    return (min(lons), min(lats), max(lons), max(lats))
+
+
+# %%
+# --- Generic function to fetch any Sentinel-2 product ---
+def fetch_sentinel2_product(
+    product_type,
+    start_date,
+    end_date=None,
+    max_cloud=10,
+    width=2048,
+    height=2048,
+    apply_water_mask=True,
     mosaicking_order="leastCC",
 ):
     """
-    Fetch pixel reflectance values for specified bands over the given time period.
-    bands         : list of band names (e.g. ["B04","B03","B02"])
-    start_iso     : ISO date string for start of period
-    end_iso       : ISO date string for end of period
-    width, height : resolution of the image in pixels
-    max_cloud     : maximum allowed cloud coverage (%)
-    mosaicking_order: 'leastCC' or 'mostRecent'
+    Generic function to fetch different Sentinel-2 products.
 
-    Returns a NumPy array of shape=(h, w, len(bands)), dtype=float32, values [0,1].
+    Args:
+        product_type: str - 'RGB', 'NDVI', 'NDWI', or 'NDCI'
+        start_date: str - ISO date string (YYYY-MM-DD) or datetime object
+        end_date: str or None - ISO date string or datetime object. If None, uses start_date + 1 month
+        max_cloud: int - Maximum cloud coverage percentage
+        width, height: int - Image resolution in pixels
+        apply_water_mask: bool - Whether to mask to water bodies only
+        mosaicking_order: str - 'leastCC' or 'mostRecent'
+
+    Returns:
+        numpy array with the requested product
     """
-    # Dynamically build the evalscript to retrieve only the requested bands
+
+    # Convert dates to proper format
+    if isinstance(start_date, str):
+        start_dt = datetime.fromisoformat(start_date)
+    else:
+        start_dt = start_date
+
+    if end_date is None:
+        end_dt = start_dt + relativedelta(months=1)
+    elif isinstance(end_date, str):
+        end_dt = datetime.fromisoformat(end_date)
+    else:
+        end_dt = end_date
+
+    start_iso = start_dt.strftime("%Y-%m-%dT00:00:00Z")
+    end_iso = end_dt.strftime("%Y-%m-%dT23:59:59Z")
+
+    # Define band requirements and calculations for each product
+    product_configs = {
+        "RGB": {
+            "bands": ["B04", "B03", "B02"],
+            "calculation": lambda arr: arr,  # Return as-is
+            "default_mask": False,  # Usually don't mask RGB for context
+        },
+        "NDVI": {
+            "bands": ["B08", "B04"],
+            "calculation": lambda arr: (arr[..., 0] - arr[..., 1])
+            / (arr[..., 0] + arr[..., 1] + 1e-6),
+            "default_mask": True,
+        },
+        "NDWI": {
+            "bands": ["B03", "B08"],
+            "calculation": lambda arr: (arr[..., 0] - arr[..., 1])
+            / (arr[..., 0] + arr[..., 1] + 1e-6),
+            "default_mask": True,
+        },
+        "NDCI": {
+            "bands": ["B05", "B04"],
+            "calculation": lambda arr: (arr[..., 0] - arr[..., 1])
+            / (arr[..., 0] + arr[..., 1] + 1e-6),
+            "default_mask": True,
+        },
+    }
+
+    if product_type not in product_configs:
+        raise ValueError(
+            f"Unsupported product type: {product_type}. Choose from: {list(product_configs.keys())}"
+        )
+
+    config = product_configs[product_type]
+    bands = config["bands"]
+
+    # Use default masking behavior if not explicitly specified
+    if apply_water_mask is None:
+        apply_water_mask = config["default_mask"]
+
+    # Build evalscript
     evalscript = f"""
     //VERSION=3
     function setup() {{
@@ -115,7 +230,7 @@ def fetch_s2(
     }}
     """
 
-    # Payload with geometry bounds, date filter, and processing options
+    # Payload for Sentinel Hub API
     payload = {
         "input": {
             "bounds": {
@@ -124,7 +239,7 @@ def fetch_s2(
             },
             "data": [
                 {
-                    "type": "S2L2A",  # Sentinel-2 Level-2A products
+                    "type": "S2L2A",
                     "dataFilter": {
                         "timeRange": {"from": start_iso, "to": end_iso},
                         "maxCloudCoverage": max_cloud,
@@ -141,20 +256,40 @@ def fetch_s2(
         },
     }
 
-    # Send request, get PNG image back as bytes
+    # Fetch data
     r = requests.post(PROCESS_URL, headers=headers, json=payload)
     r.raise_for_status()
 
-    # Open the PNG in memory and convert to NumPy array
+    # Process image
     img = Image.open(BytesIO(r.content))
     arr = np.array(img, dtype=np.uint8)
 
-    # Some PNGs include an alpha channel, we strip it here
+    # Remove alpha channel if present
     if arr.ndim == 3 and arr.shape[2] > len(bands):
         arr = arr[..., : len(bands)]
 
-    # Scale 0–255 values to 0.0–1.0 floats for further processing
-    return arr.astype(np.float32) / 255.0
+    # Scale to 0-1 range
+    arr = arr.astype(np.float32) / 255.0
+
+    # Apply calculation for the specific product
+    result = config["calculation"](arr)
+
+    # Apply water mask if requested
+    if apply_water_mask and water_bodies is not None:
+        bounds = get_bounds_from_geometry(geom)
+        water_mask = create_water_mask(result.shape[:2], bounds, water_bodies)
+
+        if result.ndim == 3:
+            # Multi-band image (RGB)
+            water_mask_3d = np.repeat(
+                water_mask[:, :, np.newaxis], result.shape[2], axis=2
+            )
+            result = np.where(water_mask_3d, result, np.nan)
+        else:
+            # Single band image (indices)
+            result = np.where(water_mask, result, np.nan)
+
+    return result
 
 
 # --- Helper functions for specific products ---
