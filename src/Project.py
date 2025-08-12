@@ -20,17 +20,11 @@ import rasterio
 import numpy as np
 from dotenv import load_dotenv
 import os
-from rasterio.warp import reproject, Resampling, transform_bounds
-from rasterio.plot import show
-# import requests
-# from shapely.geometry import box
 import json
 import time
 import zipfile
 import requests
 import geopandas as gpd
-# from pyproj import Transformer
-#import contextily as ctx
 from tools import *
 from illegal import *
 
