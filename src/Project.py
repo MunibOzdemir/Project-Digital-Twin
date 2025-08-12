@@ -27,16 +27,16 @@ from illegal import *
 # %%
 load_dotenv()
 
-user_name = os.getenv('API_USERNAME')
-user_password = os.getenv('API_PASSWORD')
+user_name = os.getenv("API_USERNAME")
+user_password = os.getenv("API_PASSWORD")
 
 # Fetch the geojson file for the region of interest
-path_geojson = get_geojson_path('alkmaar.geojson')
+path_geojson = get_geojson_path("alkmaar.geojson")
 
 # Get the current working directory (useful in Jupyter notebooks)
 current_dir = os.getcwd()  # This will give you the current working directory
-parent_dir = os.path.join(current_dir, '..')  # Parent directory
-folder_data = str(os.path.join(parent_dir, 'data'))  # Point to the 'data' folder
+parent_dir = os.path.join(current_dir, "..")  # Parent directory
+folder_data = str(os.path.join(parent_dir, "data"))  # Point to the 'data' folder
 
 # %%
 # The first parameter is the path to the geojson, the second the map where the cropped satellite data will be downloaded, the third is your NSO username and the last your NSO password.
@@ -52,7 +52,7 @@ georegion = nso.nso_georegion(
 # Max_diff parameters represents the amount of percentage the selected region has to be in the satellite image.
 # So 1 is the the selected region has to be fully in the satellite images while 0.7 donates only 70% of the selected region is in the
 links = georegion.retrieve_download_links(
-    max_diff=0.5, start_date="2019-05-01", end_date="2019-10-01"
+    max_diff=0.5, start_date="2022-01-01", end_date="2022-04-01"
 )
 
 
@@ -76,54 +76,21 @@ for link in links:
 # The output will stored in the output folder.
 # The parameters are : link, delete_zip_file = False, delete_source_files = True,  plot=True, in_image_cloud_percentage = False,  add_ndvi_band = False, add_height_band = False
 # description of these parameters can be found in the code.
-georegion.execute_link(links_group[0],  delete_zip_file=True, plot=False, add_ndvi_band=True)
-
-# %%
-tif_path_2019 = get_tif_path()
-
-# %%
-# This method fetches all the download links with all the satellite images the NSO has which contain the region in the given geojson.
-# Max_diff parameters represents the amount of percentage the selected region has to be in the satellite image.
-# So 1 is the the selected region has to be fully in the satellite images while 0.7 donates only 70% of the selected region is in the
-links = georegion.retrieve_download_links(
-    max_diff=0.5, start_date="2022-01-01", end_date="2022-10-01"
+georegion.execute_link(
+    links_group[0], delete_zip_file=True, plot=False, add_ndvi_band=True
 )
-# %%
-# This example filters out only 50 cm RGB Infrared Superview satellite imagery in the summer from all the links
-season = "Spring"
-links_group = []
-for link in links:
-    # Gebruik hier 200cm om snel een beeld te krijgen
-    if "SV" in link and "200cm" in link and "RGBI" in link:
-        if (
-            sat_manipulator.get_season_for_month(
-                int(link.split("/")[len(link.split("/")) - 1][4:6])
-            )[0]
-            == season
-        ):
-            links_group.append(link)
 
 # %%
-# Downloads a satellite image from the NSO, makes a crop out of it so it fits the geojson region and calculates the NVDI index.
-# The output will stored in the output folder.
-# The parameters are : link, delete_zip_file = False, delete_source_files = True,  plot=True, in_image_cloud_percentage = False,  add_ndvi_band = False, add_height_band = False
-# description of these parameters can be found in the code.
-georegion.execute_link(links_group[0],  delete_zip_file=True, plot=False, add_ndvi_band=True, )
-
-# %%
-tif_path_2022 = get_tif_path()
-
-
-# %%
-# Simple change detection - add this to your "Next step" cell
-change_data = detect_visual_changes_proper(tif_path_2019, tif_path_2022)
+tif_path = get_tif_path()
 
 # %%
 from web_export import export_for_web, create_simple_server
 
 # Option 2: Export just one image (original functionality)
-bounds_info = export_for_web(tif_path_2022, path_geojson)
+bounds_info = export_for_web(tif_path, path_geojson)
 
 server_url = create_simple_server(folder_data)
 print(f"Server running at: {server_url}")
 
+
+# %%
