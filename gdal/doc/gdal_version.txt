@@ -1,1 +1,0 @@
-GDAL 3.11.3 "Eganville", released 2025/07/12
