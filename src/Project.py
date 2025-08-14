@@ -27,7 +27,7 @@ import requests
 import geopandas as gpd
 from tools import *
 from illegal import *
-from radar_copernicus import *
+from radar_copernicus import fetch_sentinel1_product, get_token
 
 # %%
 load_dotenv()
