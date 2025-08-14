@@ -15,6 +15,7 @@ from dateutil.relativedelta import relativedelta
 from scipy import ndimage, stats
 from skimage import filters, measure, morphology
 import warnings
+from tools import get_geojson_path
 warnings.filterwarnings('ignore')
 
 # --- Configuration & credentials ---
@@ -24,7 +25,7 @@ TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/api/v1/process"
 
 # Path to your GeoJSON files
-GEOJSON_PATH = r"C:\Users\munib\Desktop\Aanbesteding\Project\Project-Digital-Twin\data\alkmaar.geojson"
+GEOJSON_PATH = path_geojson = get_geojson_path('alkmaar.geojson')
 SURFACE_WATER_PATH = r"C:\Users\munib\Desktop\Aanbesteding\Project\Project-Digital-Twin\data\surface_water.geojson"
 
 # Read GeoJSON and extract correct geometry
