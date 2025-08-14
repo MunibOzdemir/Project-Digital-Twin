@@ -48,3 +48,8 @@ satellite-images-nso>=1.2.5
 
 # Supporting packages
 affine>=2.4.0
+
+# Web framework
+flask>=2.0.0
+flask-cors>=3.0.0
+pillow>=8.0.0

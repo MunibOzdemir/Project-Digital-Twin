@@ -1623,132 +1623,134 @@ def plot_infrastructure_monitoring(infra_results):
         print("   • Annual structural assessments")
 
 # %%
+
+if __name__ == "__main__":
 # === EXAMPLE USAGE AND TESTING ===
 
-print("=== ADVANCED RADAR APPLICATIONS FOR ALKMAAR ===")
-print("Testing comprehensive radar monitoring capabilities...\n")
+    print("=== ADVANCED RADAR APPLICATIONS FOR ALKMAAR ===")
+    print("Testing comprehensive radar monitoring capabilities...\n")
 
-# Test 1: Flood Detection
-print("1. TESTING FLOOD DETECTION...")
-try:
-    flood_results = detect_flood_extent(
-        baseline_dates=['2024-07-01', '2024-08-01'],  # Summer baseline
-        flood_dates=['2024-01-15', '2024-02-15'],     # Winter potential flooding
-        water_threshold_vv=-18,
-        water_threshold_vh=-22,
-        min_flood_area=30
-    )
-    
-    if flood_results:
-        plot_flood_analysis(flood_results)
-    else:
-        print("⚠️  No flood data available for analysis")
+    # Test 1: Flood Detection
+    print("1. TESTING FLOOD DETECTION...")
+    try:
+        flood_results = detect_flood_extent(
+            baseline_dates=['2024-07-01', '2024-08-01'],  # Summer baseline
+            flood_dates=['2024-01-15', '2024-02-15'],     # Winter potential flooding
+            water_threshold_vv=-18,
+            water_threshold_vh=-22,
+            min_flood_area=30
+        )
         
-except Exception as e:
-    print(f"✗ Error in flood detection: {e}")
+        if flood_results:
+            plot_flood_analysis(flood_results)
+        else:
+            print("⚠️  No flood data available for analysis")
+            
+    except Exception as e:
+        print(f"✗ Error in flood detection: {e}")
 
-print("\n" + "="*60 + "\n")
+    print("\n" + "="*60 + "\n")
 
-# Test 2: Construction Timeline
-print("2. TESTING CONSTRUCTION TIMELINE...")
-try:
-    construction_results = analyze_construction_timeline(
-        start_date='2024-01-01',
-        end_date='2024-08-01',
-        time_interval_months=2,
-        change_threshold=1.2
-    )
-    
-    if construction_results:
-        plot_construction_timeline(construction_results)
-    else:
-        print("⚠️  Insufficient data for construction timeline")
+    # Test 2: Construction Timeline
+    print("2. TESTING CONSTRUCTION TIMELINE...")
+    try:
+        construction_results = analyze_construction_timeline(
+            start_date='2024-01-01',
+            end_date='2024-08-01',
+            time_interval_months=2,
+            change_threshold=1.2
+        )
         
-except Exception as e:
-    print(f"✗ Error in construction timeline: {e}")
+        if construction_results:
+            plot_construction_timeline(construction_results)
+        else:
+            print("⚠️  Insufficient data for construction timeline")
+            
+    except Exception as e:
+        print(f"✗ Error in construction timeline: {e}")
 
-print("\n" + "="*60 + "\n")
+    print("\n" + "="*60 + "\n")
 
-# Test 3: Agricultural Monitoring
-print("3. TESTING AGRICULTURAL MONITORING...")
-try:
-    agricultural_results = monitor_agricultural_cycles(
-        start_date='2024-03-01',
-        end_date='2024-08-01',
-        time_interval_months=1
-    )
-    
-    if agricultural_results:
-        plot_agricultural_monitoring(agricultural_results)
-    else:
-        print("⚠️  Insufficient data for agricultural monitoring")
+    # Test 3: Agricultural Monitoring
+    print("3. TESTING AGRICULTURAL MONITORING...")
+    try:
+        agricultural_results = monitor_agricultural_cycles(
+            start_date='2024-03-01',
+            end_date='2024-08-01',
+            time_interval_months=1
+        )
         
-except Exception as e:
-    print(f"✗ Error in agricultural monitoring: {e}")
+        if agricultural_results:
+            plot_agricultural_monitoring(agricultural_results)
+        else:
+            print("⚠️  Insufficient data for agricultural monitoring")
+            
+    except Exception as e:
+        print(f"✗ Error in agricultural monitoring: {e}")
 
-print("\n" + "="*60 + "\n")
+    print("\n" + "="*60 + "\n")
 
-# Test 4: Ice Detection
-print("4. TESTING ICE DETECTION...")
-try:
-    ice_results = detect_ice_on_canals(
-        winter_dates=['2024-01-15', '2024-02-01', '2024-02-15'],
-        baseline_dates=['2024-07-01', '2024-08-01'],  # Summer baseline
-        ice_threshold_vv=-12,
-        ice_threshold_ratio=15
-    )
-    
-    if ice_results:
-        plot_ice_detection(ice_results)
-    else:
-        print("⚠️  No ice detection data available")
+    # Test 4: Ice Detection
+    print("4. TESTING ICE DETECTION...")
+    try:
+        ice_results = detect_ice_on_canals(
+            winter_dates=['2024-01-15', '2024-02-01', '2024-02-15'],
+            baseline_dates=['2024-07-01', '2024-08-01'],  # Summer baseline
+            ice_threshold_vv=-12,
+            ice_threshold_ratio=15
+        )
         
-except Exception as e:
-    print(f"✗ Error in ice detection: {e}")
+        if ice_results:
+            plot_ice_detection(ice_results)
+        else:
+            print("⚠️  No ice detection data available")
+            
+    except Exception as e:
+        print(f"✗ Error in ice detection: {e}")
 
-print("\n" + "="*60 + "\n")
+    print("\n" + "="*60 + "\n")
 
-# Test 5: Infrastructure Time Series
-print("5. TESTING ADVANCED INFRASTRUCTURE MONITORING...")
-try:
-    infrastructure_results = advanced_infrastructure_monitoring(
-        start_date='2024-03-01',
-        end_date='2024-08-01',
-        analysis_interval_days=12,  # Every Sentinel-1 cycle
-        coherence_threshold=0.4,
-        displacement_threshold=0.8
-    )
-    
-    if infrastructure_results:
-        plot_infrastructure_monitoring(infrastructure_results)
-    else:
-        print("⚠️  Insufficient data for infrastructure monitoring")
+    # Test 5: Infrastructure Time Series
+    print("5. TESTING ADVANCED INFRASTRUCTURE MONITORING...")
+    try:
+        infrastructure_results = advanced_infrastructure_monitoring(
+            start_date='2024-03-01',
+            end_date='2024-08-01',
+            analysis_interval_days=12,  # Every Sentinel-1 cycle
+            coherence_threshold=0.4,
+            displacement_threshold=0.8
+        )
         
-except Exception as e:
-    print(f"✗ Error in infrastructure monitoring: {e}")
+        if infrastructure_results:
+            plot_infrastructure_monitoring(infrastructure_results)
+        else:
+            print("⚠️  Insufficient data for infrastructure monitoring")
+            
+    except Exception as e:
+        print(f"✗ Error in infrastructure monitoring: {e}")
 
-print("\n" + "="*80)
-print("=== ADVANCED RADAR APPLICATIONS COMPLETE ===")
-print("="*80)
+    print("\n" + "="*80)
+    print("=== ADVANCED RADAR APPLICATIONS COMPLETE ===")
+    print("="*80)
 
-print(f"\n🎯 SUMMARY OF CAPABILITIES:")
-print(f"✅ Flood Detection - Monitor water management systems")
-print(f"✅ Construction Timeline - Track urban development") 
-print(f"✅ Agricultural Monitoring - Analyze crop cycles")
-print(f"✅ Ice Detection - Winter canal monitoring")
-print(f"✅ Infrastructure Health - Advanced time series analysis")
+    print(f"\n🎯 SUMMARY OF CAPABILITIES:")
+    print(f"✅ Flood Detection - Monitor water management systems")
+    print(f"✅ Construction Timeline - Track urban development") 
+    print(f"✅ Agricultural Monitoring - Analyze crop cycles")
+    print(f"✅ Ice Detection - Winter canal monitoring")
+    print(f"✅ Infrastructure Health - Advanced time series analysis")
 
-print(f"\n📊 APPLICATIONS FOR ALKMAAR:")
-print(f"• Polder management and flood risk assessment")
-print(f"• Urban planning and construction oversight")
-print(f"• Agricultural productivity monitoring")
-print(f"• Winter navigation safety on canals")
-print(f"• Bridge and infrastructure health monitoring")
-print(f"• Real-time environmental monitoring dashboard")
+    print(f"\n📊 APPLICATIONS FOR ALKMAAR:")
+    print(f"• Polder management and flood risk assessment")
+    print(f"• Urban planning and construction oversight")
+    print(f"• Agricultural productivity monitoring")
+    print(f"• Winter navigation safety on canals")
+    print(f"• Bridge and infrastructure health monitoring")
+    print(f"• Real-time environmental monitoring dashboard")
 
-print(f"\n🔧 NEXT STEPS:")
-print(f"• Integrate with weather data for improved accuracy")
-print(f"• Set up automated alert systems for critical changes")
-print(f"• Combine with Sentinel-2 optical data")
-print(f"• Create operational monitoring dashboard")
-print(f"• Validate results with ground truth measurements")
+    print(f"\n🔧 NEXT STEPS:")
+    print(f"• Integrate with weather data for improved accuracy")
+    print(f"• Set up automated alert systems for critical changes")
+    print(f"• Combine with Sentinel-2 optical data")
+    print(f"• Create operational monitoring dashboard")
+    print(f"• Validate results with ground truth measurements")
