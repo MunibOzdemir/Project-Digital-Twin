@@ -1,6 +1,6 @@
-# Add these imports to your existing notebook
+# simple_web_export.py - Barebones version
 import json
-from pathlib import Path  # Fixed: was "from zipfile import Path"
+from pathlib import Path
 from PIL import Image
 import os
 import rasterio

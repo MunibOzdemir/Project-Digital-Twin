@@ -3,173 +3,1265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Water Quality Satellite Map</title>
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
-    
+    <title>Alkmaar Municipality - Satellite Analysis</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
-        #map { height: 100vh; width: 100vw; }
-        .layer-control {
-            position: absolute; top: 10px; right: 10px; background: white;
-            padding: 15px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            height: 100vh; 
+            overflow: hidden;
+            background: #f0f2f5;
+        }
+        
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 400px;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
             z-index: 1000;
         }
-        .layer-control h3 { margin: 0 0 10px 0; font-size: 16px; }
-        .layer-option { margin: 5px 0; }
-        .layer-option input { margin-right: 8px; }
-        .opacity-slider { width: 100%; margin-top: 10px; }
-        .legend {
-            position: absolute; bottom: 20px; right: 20px; background: white;
-            padding: 10px; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            z-index: 1000; display: none;
+        
+        .sidebar-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
-        .legend-title { font-weight: bold; margin-bottom: 5px; }
-        .legend-item { display: flex; align-items: center; margin: 2px 0; }
-        .legend-color { width: 20px; height: 15px; margin-right: 5px; border: 1px solid #ccc; }
+        
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        /* Map container */
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Control sections */
+        .control-section {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .control-section h3 {
+            margin-bottom: 12px;
+            color: #495057;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        /* Date selection */
+        .date-selector {
+            margin-bottom: 15px;
+        }
+        
+        .date-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .date-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .date-input.has-data {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        
+        .date-input.no-data {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+        
+        /* Cloud coverage slider */
+        .slider-container {
+            margin: 15px 0;
+        }
+        
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: #6c757d;
+        }
+        
+        .cloud-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #dee2e6;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .cloud-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .cloud-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Latest date section (Copernicus style) */
+        .latest-date-section {
+            background: #e7f3ff;
+            border: 1px solid #bee5eb;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .latest-date-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #0c5460;
+        }
+        
+        .latest-date-info {
+            font-size: 12px;
+            color: #0c5460;
+            line-height: 1.4;
+        }
+        
+        .use-latest-btn {
+            padding: 6px 12px;
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .use-latest-btn:hover {
+            background: #138496;
+            transform: translateY(-1px);
+        }
+        
+        /* Available dates display */
+        .available-dates {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+        }
+        
+        .date-chip {
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .date-chip:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+        
+        .date-chip.excellent {
+            background: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        
+        .date-chip.good {
+            background: #fff3cd;
+            color: #856404;
+            border-color: #ffeaa7;
+        }
+        
+        .date-chip.acceptable {
+            background: #ffeaa7;
+            color: #856404;
+            border-color: #ffdf7e;
+        }
+        
+        .date-chip.cloudy {
+            background: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+        
+        .date-chip.selected {
+            background: #667eea;
+            color: white;
+            border-color: #5a67d8;
+            font-weight: 600;
+        }
+        
+        /* Cloud percentage badge */
+        .cloud-badge {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border-radius: 8px;
+            padding: 1px 4px;
+            font-size: 9px;
+            font-weight: bold;
+        }
+        
+        /* Legend */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 11px;
+            color: #6c757d;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Layer controls with checkboxes */
+        .layer-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+        
+        .layer-item:hover {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .layer-item.active {
+            background: #e7f3ff;
+            border-color: #007bff;
+        }
+        
+        .layer-checkbox {
+            width: 18px;
+            height: 18px;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+        
+        .layer-info {
+            flex: 1;
+        }
+        
+        .layer-name {
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 2px;
+        }
+        
+        .layer-description {
+            font-size: 11px;
+            color: #6c757d;
+        }
+        
+        .layer-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .opacity-slider {
+            width: 80px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #dee2e6;
+            border-radius: 2px;
+            outline: none;
+        }
+        
+        .opacity-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+        }
+        
+        .opacity-slider::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #007bff;
+            cursor: pointer;
+        }
+        
+        .opacity-value {
+            font-size: 11px;
+            color: #6c757d;
+            min-width: 30px;
+            text-align: right;
+        }
+        
+        /* Water mask option */
+        .water-mask-option {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin-top: 8px;
+            background: #e7f3ff;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .water-mask-option input {
+            margin-right: 8px;
+        }
+        
+        /* Buttons */
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #e9ecef;
+            color: #495057;
+        }
+        
+        .btn-secondary:hover {
+            background: #dee2e6;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        /* Status bar */
+        .status-bar {
+            padding: 12px;
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #004085;
+            margin-top: 15px;
+        }
+        
+        .status-bar.error {
+            background: #f8d7da;
+            border-color: #dc3545;
+            color: #721c24;
+        }
+        
+        .status-bar.success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        
+        /* Info box */
+        .info-box {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .info-box strong {
+            color: #495057;
+        }
+        
+        .bounds-info {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+        
+        /* Loading state */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Scrollbar styling */
+        .available-dates::-webkit-scrollbar,
+        .sidebar-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .available-dates::-webkit-scrollbar-track,
+        .sidebar-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .available-dates::-webkit-scrollbar-thumb,
+        .sidebar-content::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+        
+        .available-dates::-webkit-scrollbar-thumb:hover,
+        .sidebar-content::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Floating map controls */
+        .map-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            font-size: 12px;
+            z-index: 1000;
+        }
+        
+        /* Active layers list */
+        .active-layers-list {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 200px;
+        }
+        
+        .active-layers-list h4 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: #495057;
+        }
+        
+        .active-layer-item {
+            padding: 4px 0;
+            color: #6c757d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .active-layer-item .layer-type {
+            font-weight: 500;
+        }
+        
+        .active-layer-item .layer-opacity {
+            font-size: 10px;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: 40%;
+            }
+            
+            .app-container {
+                flex-direction: column;
+            }
+            
+            .active-layers-list {
+                top: 10px;
+                right: 10px;
+                font-size: 11px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div id="map"></div>
-    
-    <div class="layer-control">
-        <h3>Water Quality Layers</h3>
-        <div class="layer-option">
-            <input type="radio" id="satellite" name="layer" value="satellite" checked>
-            <label for="satellite">Satellite RGB</label>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>🛰️ Gemeente Alkmaar</h1>
+                <p>Satellite Imagery Analysis Platform</p>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- Date Selection -->
+                <div class="control-section">
+                    <h3>📅 Date Selection</h3>
+                    
+                    <div class="date-selector">
+                        <input type="date" id="selected-date" class="date-input" value="2024-06-01">
+                    </div>
+                    
+                    <button class="btn btn-secondary" onclick="clearCache()" style="width: 100%; margin-top: 10px;">
+                        🗑️ Clear Image Cache
+                    </button>
+                </div>
+                
+                <!-- Layer Controls with Checkboxes -->
+                <div class="control-section">
+                    <h3>🗺️ Satellite Layers</h3>
+                    
+                    <!-- RGB Layer -->
+                    <div class="layer-item" id="layer-rgb">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-rgb" onchange="toggleLayer('RGB')">
+                        <div class="layer-info">
+                            <div class="layer-name">🖼️ RGB (True Color)</div>
+                            <div class="layer-description">Natural color composite</div>
+                        </div>
+                        <div class="layer-controls">
+                            <input type="range" class="opacity-slider" id="opacity-rgb" 
+                                   min="0" max="100" value="80" onchange="updateOpacity('RGB')">
+                            <span class="opacity-value" id="opacity-value-rgb">80%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- NDVI Layer -->
+                    <div class="layer-item" id="layer-ndvi">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-ndvi" onchange="toggleLayer('NDVI')">
+                        <div class="layer-info">
+                            <div class="layer-name">🌱 NDVI</div>
+                            <div class="layer-description">Vegetation health index</div>
+                        </div>
+                        <div class="layer-controls">
+                            <input type="range" class="opacity-slider" id="opacity-ndvi" 
+                                   min="0" max="100" value="80" onchange="updateOpacity('NDVI')">
+                            <span class="opacity-value" id="opacity-value-ndvi">80%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- NDCI Layer -->
+                    <div class="layer-item" id="layer-ndci">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-ndci" onchange="toggleLayer('NDCI')">
+                        <div class="layer-info">
+                            <div class="layer-name">💧 NDCI (Water Bodies)</div>
+                            <div class="layer-description">Chlorophyll concentration in water</div>
+                        </div>
+                        <div class="layer-controls">
+                            <input type="range" class="opacity-slider" id="opacity-ndci" 
+                                   min="0" max="100" value="80" onchange="updateOpacity('NDCI')">
+                            <span class="opacity-value" id="opacity-value-ndci">80%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- NDWI Layer -->
+                    <div class="layer-item" id="layer-ndwi">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-ndwi" onchange="toggleLayer('NDWI')">
+                        <div class="layer-info">
+                            <div class="layer-name">🌊 NDWI</div>
+                            <div class="layer-description">Water content index</div>
+                        </div>
+                        <div class="layer-controls">
+                            <input type="range" class="opacity-slider" id="opacity-ndwi" 
+                                   min="0" max="100" value="80" onchange="updateOpacity('NDWI')">
+                            <span class="opacity-value" id="opacity-value-ndwi">80%</span>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-danger" onclick="clearAllLayers()" style="width: 100%; margin-top: 10px;">
+                        ❌ Clear All Layers
+                    </button>
+                </div>
+                
+                <!-- Info Box -->
+                <div class="control-section">
+                    <h3>ℹ️ Coverage Area</h3>
+                    <div class="info-box">
+                        <strong>Municipality Bounds:</strong>
+                        <div class="bounds-info" id="bounds-info">
+                            Loading bounds information...
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status Bar -->
+                <div id="status" class="status-bar">
+                    Initializing application...
+                </div>
+            </div>
         </div>
-        <div class="layer-option">
-            <input type="radio" id="ndvi" name="layer" value="ndvi">
-            <label for="ndvi">NDVI</label>
-        </div>
-        <div class="layer-option">
-            <input type="radio" id="ndwi" name="layer" value="ndwi">
-            <label for="ndwi">NDWI (Water Quality)</label>
-        </div>
-        <div class="layer-option">
-            <label for="opacity">Opacity:</label>
-            <input type="range" id="opacity" class="opacity-slider" min="0" max="1" step="0.1" value="1">
-        </div>
-    </div>
-    
-    <div class="legend" id="legend">
-        <div class="legend-title">Water Quality Index</div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #8B4513;"></div>
-            <span>Poor (-1 to -0.5)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #DAA520;"></div>
-            <span>Fair (-0.5 to 0)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #9ACD32;"></div>
-            <span>Good (0 to 0.5)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #228B22;"></div>
-            <span>Excellent (0.5 to 1)</span>
+        
+        <!-- Map -->
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="map-info">
+                <strong>Gemeente Alkmaar</strong><br>
+                <span id="map-info-text">Click on map for coordinates</span>
+            </div>
+            
+            <!-- Active Layers List -->
+            <div class="active-layers-list" id="active-layers-list" style="display: none;">
+                <h4>Active Layers</h4>
+                <div id="active-layers-content">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map').setView([52.6316, 4.7482], 13);
-        const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+        // Global variables
+        let map;
+        let layers = {};  // Store all layers with their overlays
+        let municipalityBounds = null;
+        let boundsRectangle = null;
         
-        let currentOverlay = null;
-        const satelliteBounds = [[52.620, 4.730], [52.643, 4.767]];
+        // Layer configurations
+        const layerConfigs = {
+            'RGB': { icon: '🖼️', color: '#667eea', description: 'True Color' },
+            'NDVI': { icon: '🌱', color: '#28a745', description: 'Vegetation' },
+            'NDCI': { icon: '💧', color: '#17a2b8', description: 'Chlorophyll' },
+            'NDWI': { icon: '🌊', color: '#007bff', description: 'Water Content' }
+        };
         
-        function createOverlayLayer(type, imagePath, bounds) {
-            return L.imageOverlay(imagePath, bounds, {
-                opacity: 1.0,
-                interactive: false,
-                crossOrigin: true
+        // Initialize application
+        async function initApp() {
+            // Initialize map
+            map = L.map('map').setView([52.63, 4.75], 11);
+            
+            // Add base layers
+            const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
             });
-
+            
+            const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri'
+            });
+            
+            osm.addTo(map);
+            
+            // Add layer control
+            const baseLayers = {
+                "OpenStreetMap": osm,
+                "Satellite Base": satellite
+            };
+            L.control.layers(baseLayers).addTo(map);
+            
+            // Load system info
+            await loadSystemInfo();
+            
+            // Set up event listeners
+            setupEventListeners();
+            
+            // Enable RGB layer by default once we have a valid date
+            await enableDefaultLayers();
+            
+            updateStatus('Application ready - Select a date and choose layers', 'success');
         }
         
-        let overlayData = {};
-        
-        function showStatus(message) {
-            console.log(message);
-            let statusDiv = document.getElementById('status');
-            if (!statusDiv) {
-                statusDiv = document.createElement('div');
-                statusDiv.id = 'status';
-                statusDiv.style.cssText = 'position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 10px; border-radius: 5px; z-index: 1001; max-width: 300px; font-size: 12px;';
-                document.body.appendChild(statusDiv);
-            }
-            statusDiv.innerHTML = message;
+        // Enable default layers (RGB by default)
+        async function enableDefaultLayers() {
+            // Wait a bit to ensure date is loaded
+            setTimeout(async () => {
+                const selectedDate = document.getElementById('selected-date').value;
+                if (selectedDate && selectedDate !== '') {
+                    // Check RGB checkbox and load it
+                    document.getElementById('checkbox-rgb').checked = true;
+                    await toggleLayer('RGB');
+                    updateStatus('RGB layer loaded by default', 'success');
+                }
+            }, 1000);
         }
         
-        showStatus('Loading bounds.json...');
-        
-        fetch('bounds.json')
-            .then(response => {
-                showStatus('bounds.json response received, parsing...');
-                return response.json();
-            })
-            .then(data => {
-                overlayData = data;
-                showStatus('Overlay data loaded successfully');
-                console.log('Loaded overlay data:', overlayData);
+        // Load latest date info (low cloud coverage only)
+        async function loadLatestDateInfo() {
+            try {
+                const response = await fetch(`/api/latest-date`);
+                const result = await response.json();
                 
-                if (overlayData.satellite) {
-                    const initialData = overlayData.satellite;
-                    showStatus(`Loading satellite image: ${initialData.path}<br>Bounds: ${JSON.stringify(initialData.bounds)}`);
-                    currentOverlay = createOverlayLayer('satellite', initialData.path, initialData.bounds);
-                    map.addLayer(currentOverlay);
-                    map.fitBounds(initialData.bounds);
+                if (result.success) {
+                    latestDateInfo = result;
                     
-                    const testImg = new Image();
-                    testImg.onload = () => showStatus('✓ Satellite image loaded successfully');
-                    testImg.onerror = () => showStatus('✗ Error loading satellite image');
-                    testImg.src = initialData.path;
+                    document.getElementById('latest-date-info').innerHTML = `
+                        <strong>${result.latest_date}</strong> - ${result.cloud_coverage.toFixed(1)}% cloud coverage
+                        <br>Latest date with excellent quality in last 30 days
+                    `;
+                    document.getElementById('latest-date-section').style.display = 'block';
                 } else {
-                    showStatus('No satellite data found in bounds.json');
+                    document.getElementById('latest-date-info').innerHTML = `
+                        No excellent quality dates found in the last 30 days
+                    `;
+                    document.getElementById('latest-date-section').style.display = 'block';
                 }
-            })
-            .catch(error => {
-                showStatus(`Error loading bounds.json: ${error.message}`);
-                console.error('Error loading bounds data:', error);
-            });
-        
-        document.querySelectorAll('input[name="layer"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                if (currentOverlay) {
-                    map.removeLayer(currentOverlay);
-                }
-                
-                const layerType = this.value;
-                const data = overlayData[layerType];
-                
-                if (data) {
-                    currentOverlay = createOverlayLayer(layerType, data.path, data.bounds);
-                    map.addLayer(currentOverlay);
-                    
-                    const legend = document.getElementById('legend');
-                    if (layerType === 'ndwi') {
-                        legend.style.display = 'block';
-                    } else {
-                        legend.style.display = 'none';
-                    }
-                }
-            });
-        });
-        
-        document.getElementById('opacity').addEventListener('input', function() {
-            if (currentOverlay) {
-                currentOverlay.setOpacity(this.value);
+            } catch (e) {
+                console.error('Error loading latest date:', e);
+                document.getElementById('latest-date-section').style.display = 'none';
             }
-        });
+        }
         
-        map.on('click', function(e) {
-            console.log('Clicked coordinates:', e.latlng);
-        });
+        // Use latest date
+        function useLatestDate() {
+            if (latestDateInfo && latestDateInfo.latest_date) {
+                document.getElementById('selected-date').value = latestDateInfo.latest_date;
+                updateDateChips(latestDateInfo.latest_date);
+                checkDateAvailability(latestDateInfo.latest_date);
+                // Reload active layers with new date
+                reloadActiveLayers();
+                updateStatus(`Using latest date: ${latestDateInfo.latest_date} (${latestDateInfo.cloud_coverage.toFixed(1)}% cloud)`, 'success');
+            }
+        }
+        
+        // Load system information
+        async function loadSystemInfo() {
+            try {
+                const response = await fetch('/api/info');
+                const info = await response.json();
+                
+                municipalityBounds = info.bounds;
+                
+                // Update bounds display
+                let boundsText = `
+                    SW: [${info.bounds[0][0].toFixed(4)}, ${info.bounds[0][1].toFixed(4)}]<br>
+                    NE: [${info.bounds[1][0].toFixed(4)}, ${info.bounds[1][1].toFixed(4)}]<br>
+                    Area: ~${info.area_km2} km²
+                `;
+                
+                if (info.surface_water === 'available') {
+                    boundsText += `<br>Water bodies: ${info.water_bodies_count} features`;
+                } else {
+                    boundsText += `<br>⚠️ No surface water data`;
+                }
+                
+                document.getElementById('bounds-info').innerHTML = boundsText;
+                
+                // Draw municipality boundary
+                if (boundsRectangle) {
+                    map.removeLayer(boundsRectangle);
+                }
+                
+                boundsRectangle = L.rectangle(municipalityBounds, {
+                    color: "#ff7800",
+                    weight: 2,
+                    fillOpacity: 0.05,
+                    dashArray: '5, 10'
+                });
+                
+                boundsRectangle.addTo(map);
+                boundsRectangle.bindPopup("Gemeente Alkmaar boundary");
+                
+                // Fit map to bounds
+                map.fitBounds(municipalityBounds);
+                
+            } catch (error) {
+                console.error('Error loading system info:', error);
+                updateStatus('Failed to load system information', 'error');
+            }
+        }
+        
+        // Toggle layer on/off
+        async function toggleLayer(productType) {
+            const checkbox = document.getElementById(`checkbox-${productType.toLowerCase()}`);
+            const layerItem = document.getElementById(`layer-${productType.toLowerCase()}`);
+            
+            if (checkbox.checked) {
+                // Load and add layer
+                await loadLayer(productType);
+                layerItem.classList.add('active');
+            } else {
+                // Remove layer
+                removeLayer(productType);
+                layerItem.classList.remove('active');
+            }
+            
+            updateActiveLayersList();
+        }
+        
+        // Load satellite layer
+        async function loadLayer(productType) {
+            const date = document.getElementById('selected-date').value;
+            const opacity = document.getElementById(`opacity-${productType.toLowerCase()}`).value / 100;
+            
+            // NDCI always uses water mask by default (no UI option needed)
+            const applyWaterMask = (productType === 'NDCI');
+            
+            updateStatus(`Loading ${productType} for ${date}...`);
+            document.querySelector('.sidebar').classList.add('loading');
+            
+            try {
+                const response = await fetch('/api/satellite-data', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        product_type: productType,
+                        date: date,
+                        apply_water_mask: applyWaterMask,
+                        opacity: opacity
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Remove existing layer if present
+                    if (layers[productType]) {
+                        map.removeLayer(layers[productType].overlay);
+                    }
+                    
+                    const imageBounds = result.bounds || municipalityBounds;
+                    
+                    const overlay = L.imageOverlay(result.imageUrl, imageBounds, {
+                        opacity: 1.0,  // Opacity is already baked into the image
+                        interactive: true
+                    });
+                    
+                    overlay.addTo(map);
+                    
+                    // Store layer information
+                    layers[productType] = {
+                        overlay: overlay,
+                        opacity: opacity * 100,
+                        date: date,
+                        waterMask: result.water_mask_applied
+                    };
+                    
+                    // Reorder layers to maintain stacking order
+                    reorderLayers();
+                    
+                    let statusMessage = `✅ ${productType} loaded for ${date}`;
+                    if (result.water_mask_applied) {
+                        statusMessage += ' (water mask applied)';
+                    }
+                    updateStatus(statusMessage, 'success');
+                } else {
+                    updateStatus(`❌ ${result.error}`, 'error');
+                    // Uncheck the checkbox if loading failed
+                    document.getElementById(`checkbox-${productType.toLowerCase()}`).checked = false;
+                    document.getElementById(`layer-${productType.toLowerCase()}`).classList.remove('active');
+                }
+            } catch (e) {
+                updateStatus(`❌ Error: ${e.message}`, 'error');
+                console.error(e);
+                // Uncheck the checkbox if loading failed
+                document.getElementById(`checkbox-${productType.toLowerCase()}`).checked = false;
+                document.getElementById(`layer-${productType.toLowerCase()}`).classList.remove('active');
+            } finally {
+                document.querySelector('.sidebar').classList.remove('loading');
+                updateActiveLayersList();
+            }
+        }
+        
+        // Remove a specific layer
+        function removeLayer(productType) {
+            if (layers[productType]) {
+                map.removeLayer(layers[productType].overlay);
+                delete layers[productType];
+                updateStatus(`Layer ${productType} removed`);
+            }
+        }
+        
+        // Clear all layers
+        function clearAllLayers() {
+            Object.keys(layers).forEach(productType => {
+                if (layers[productType]) {
+                    map.removeLayer(layers[productType].overlay);
+                }
+                // Uncheck checkbox
+                const checkbox = document.getElementById(`checkbox-${productType.toLowerCase()}`);
+                if (checkbox) checkbox.checked = false;
+                // Remove active class
+                const layerItem = document.getElementById(`layer-${productType.toLowerCase()}`);
+                if (layerItem) layerItem.classList.remove('active');
+            });
+            layers = {};
+            
+            updateActiveLayersList();
+            updateStatus('All layers cleared');
+        }
+        
+        // Update layer opacity
+        async function updateOpacity(productType) {
+            const opacitySlider = document.getElementById(`opacity-${productType.toLowerCase()}`);
+            const opacityValue = document.getElementById(`opacity-value-${productType.toLowerCase()}`);
+            const opacity = opacitySlider.value;
+            
+            opacityValue.textContent = opacity + '%';
+            
+            // If layer is active, reload it with new opacity
+            if (layers[productType]) {
+                layers[productType].opacity = opacity;
+                // Reload the layer with new opacity
+                await loadLayer(productType);
+            }
+        }
+        
+        // Reorder layers to maintain proper stacking
+        function reorderLayers() {
+            // Order: RGB (bottom), NDWI, NDVI, NDCI (top)
+            const layerOrder = ['RGB', 'NDWI', 'NDVI', 'NDCI'];
+            
+            layerOrder.forEach(productType => {
+                if (layers[productType]) {
+                    layers[productType].overlay.bringToFront();
+                }
+            });
+            
+            // Always bring boundary to front
+            if (boundsRectangle) {
+                boundsRectangle.bringToFront();
+            }
+        }
+        
+        // Update active layers list display
+        function updateActiveLayersList() {
+            const activeLayersList = document.getElementById('active-layers-list');
+            const activeLayersContent = document.getElementById('active-layers-content');
+            
+            const activeLayers = Object.keys(layers);
+            
+            if (activeLayers.length > 0) {
+                activeLayersList.style.display = 'block';
+                
+                activeLayersContent.innerHTML = activeLayers.map(productType => {
+                    const config = layerConfigs[productType];
+                    const layerInfo = layers[productType];
+                    return `
+                        <div class="active-layer-item">
+                            <span class="layer-type">${config.icon} ${productType}</span>
+                            <span class="layer-opacity">${layerInfo.opacity}%</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                activeLayersList.style.display = 'none';
+            }
+        }
+        
+        // Load available dates from API
+        async function loadAvailableDates() {
+            updateStatus('Loading available dates...');
+            
+            try {
+                const response = await fetch(`/api/available-dates`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    availableDatesData = result;
+                    displayAvailableDates(result);
+                    updateStatus(`Found ${result.total} excellent quality dates in last 30 days`);
+                    
+                    // Check if current selected date is available
+                    const currentDate = document.getElementById('selected-date').value;
+                    checkDateAvailability(currentDate);
+                    
+                    // Update latest date info
+                    await loadLatestDateInfo();
+                } else {
+                    updateStatus('Failed to load available dates', 'error');
+                }
+            } catch (e) {
+                console.error('Error loading dates:', e);
+                updateStatus('Error loading available dates', 'error');
+            }
+        }
+        
+        // Display available dates as chips with cloud coverage
+        function displayAvailableDates(dateData) {
+            const container = document.getElementById('available-dates');
+            
+            if (!dateData.categorized || !dateData.categorized.excellent || dateData.categorized.excellent.length === 0) {
+                container.innerHTML = '<span style="color: #dc3545;">No excellent quality dates available in last 30 days</span>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            // Show only excellent dates, sorted newest first
+            const excellentDates = dateData.categorized.excellent.sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            excellentDates.forEach(dateInfo => {
+                const chip = document.createElement('div');
+                chip.className = 'date-chip excellent';
+                chip.textContent = dateInfo.date;
+                
+                // Add cloud coverage badge
+                const badge = document.createElement('span');
+                badge.className = 'cloud-badge';
+                badge.textContent = `${Math.round(dateInfo.cloud)}%`;
+                chip.appendChild(badge);
+                
+                // Set tooltip
+                chip.title = `${dateInfo.date} - ${dateInfo.cloud.toFixed(1)}% cloud coverage (excellent quality)`;
+                
+                // Click to select date
+                chip.onclick = () => {
+                    document.getElementById('selected-date').value = dateInfo.date;
+                    updateDateChips(dateInfo.date);
+                    checkDateAvailability(dateInfo.date);
+                    // Reload active layers with new date
+                    reloadActiveLayers();
+                };
+                
+                container.appendChild(chip);
+            });
+            
+            // Select current date if available
+            const currentDate = document.getElementById('selected-date').value;
+            updateDateChips(currentDate);
+        }
+        
+        // Reload all active layers with new date
+        async function reloadActiveLayers() {
+            const activeLayers = Object.keys(layers);
+            if (activeLayers.length > 0) {
+                updateStatus(`Reloading ${activeLayers.length} layer(s) with new date...`);
+                for (const productType of activeLayers) {
+                    await loadLayer(productType);
+                }
+            }
+        }
+        
+        // Update selected state of date chips
+        function updateDateChips(selectedDate) {
+            document.querySelectorAll('.date-chip').forEach(chip => {
+                if (chip.textContent.includes(selectedDate)) {
+                    chip.classList.add('selected');
+                } else {
+                    chip.classList.remove('selected');
+                }
+            });
+        }
+        
+        // Check if selected date has available data with cloud info
+        function checkDateAvailability(date) {
+            const input = document.getElementById('selected-date');
+            
+            if (!availableDatesData.dates_with_cloud) {
+                input.classList.remove('has-data', 'no-data');
+                return;
+            }
+            
+            // Find date in available data
+            const dateInfo = availableDatesData.dates_with_cloud.find(d => d.date === date);
+            
+            if (dateInfo) {
+                input.classList.remove('no-data');
+                input.classList.add('has-data');
+                updateStatus(`✅ Data available for ${date} (${dateInfo.cloud_cover.toFixed(1)}% cloud)`, 'success');
+            } else {
+                input.classList.remove('has-data');
+                input.classList.add('no-data');
+                updateStatus(`⚠️ No data for ${date} - select a highlighted date`, 'error');
+            }
+        }
+        
+        // Clear cache
+        async function clearCache() {
+            updateStatus('Clearing cache...');
+            
+            try {
+                const response = await fetch('/api/clear-cache', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        product_type: 'all'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateStatus(`✅ ${result.message}`, 'success');
+                } else {
+                    updateStatus('Failed to clear cache', 'error');
+                }
+            } catch (e) {
+                console.error('Error clearing cache:', e);
+                updateStatus('Error clearing cache', 'error');
+            }
+        }
+        
+        // Update status message
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status-bar';
+            if (type === 'error') {
+                status.classList.add('error');
+            } else if (type === 'success') {
+                status.classList.add('success');
+            }
+        }
+        
+        // Set up event listeners
+        function setupEventListeners() {
+            // Date input change
+            document.getElementById('selected-date').addEventListener('change', function(e) {
+                const selectedDate = e.target.value;
+                updateDateChips(selectedDate);
+                checkDateAvailability(selectedDate);
+                // Automatically reload active layers with new date
+                reloadActiveLayers();
+            });
+            
+            // Map click for coordinates
+            map.on('click', function(e) {
+                const coords = `Lat: ${e.latlng.lat.toFixed(6)}, Lon: ${e.latlng.lng.toFixed(6)}`;
+                document.getElementById('map-info-text').textContent = coords;
+                
+                L.popup()
+                    .setLatLng(e.latlng)
+                    .setContent(coords)
+                    .openOn(map);
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) return;
+                
+                switch(e.key.toLowerCase()) {
+                    case 'r':
+                        document.getElementById('checkbox-rgb').click();
+                        break;
+                    case 'n':
+                        document.getElementById('checkbox-ndvi').click();
+                        break;
+                    case 'c':
+                        if (e.shiftKey) {
+                            clearAllLayers();
+                        } else {
+                            document.getElementById('checkbox-ndci').click();
+                        }
+                        break;
+                    case 'w':
+                        document.getElementById('checkbox-ndwi').click();
+                        break;
+                    case 'i':
+                        document.getElementById('checkbox-ndci').click();
+                        break;
+                }
+            });
+        }
+        
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', initApp);
+        
+        // Log startup
+        console.log('🚀 Alkmaar Municipality Satellite Viewer');
+        console.log('Simplified date selection - user picks any date');
+        console.log('Keyboard shortcuts: R=RGB, N=NDVI, I/C=NDCI, W=NDWI, Shift+C=Clear All');
     </script>
 </body>
 </html>
