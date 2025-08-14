@@ -444,9 +444,9 @@ def download_bgt_for_alkmaar(geojson_path, output_folder):
     return bgt_gdf
 
 # change here for different bgt years
-def filter_bgt_data(bgt_data, path_geojson):
+def filter_bgt_data(bgt_data, path_geojson, start_date="2019-03-01", end_date="2022-05-01"):
 
-    bgt_data_between_2019_2022 = bgt_data[(bgt_data["creationDate"] < "2022-05-01") & (bgt_data["creationDate"] > "2019-03-01")]
+    bgt_data_between_2019_2022 = bgt_data[(bgt_data["creationDate"] < end_date) & (bgt_data["creationDate"] > start_date)]
 
     # Load the Alkmaar boundary
     alkmaar_boundary = gpd.read_file(path_geojson)

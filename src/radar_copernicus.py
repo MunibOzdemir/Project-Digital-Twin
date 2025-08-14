@@ -1755,3 +1755,4 @@ if __name__ == "__main__":
     print(f"• Combine with Sentinel-2 optical data")
     print(f"• Create operational monitoring dashboard")
     print(f"• Validate results with ground truth measurements")
+# %%

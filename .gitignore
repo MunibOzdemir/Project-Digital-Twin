@@ -218,5 +218,8 @@ web/*
 # GML files are used for storing geospatial data and can be large.
 *.gml
 
+# GFS files
+*.gfs
+
 # cache files
 *.pkl

@@ -1,4 +1,4 @@
-# web_backend.py - Updated backend with surface water GeoJSON masking
+# web_backend.py - Updated backend with illegal construction only
 import json
 import os
 import hashlib
@@ -16,6 +16,8 @@ import requests
 import geopandas as gpd
 from rasterio.features import rasterize
 from rasterio.transform import from_bounds
+from scipy import ndimage
+from skimage import measure
 
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
@@ -57,9 +59,9 @@ def get_project_paths():
 
 STATIC_DIR, CACHE_DIR, DATA_DIR = get_project_paths()
 
-print(f"📂 Static files: {STATIC_DIR}")
-print(f"💾 Cache directory: {CACHE_DIR}")
-print(f"📊 Data directory: {DATA_DIR}")
+print(f"Static files: {STATIC_DIR}")
+print(f"Cache directory: {CACHE_DIR}")
+print(f"Data directory: {DATA_DIR}")
 
 # ================================
 # AUTO-CLEAR CACHE ON STARTUP (FOR TESTING)
@@ -72,11 +74,11 @@ def clear_cache_on_startup():
         for f in cache_files:
             f.unlink()
         if cache_files:
-            print(f"🗑️ Testing mode: Cleared {len(cache_files)} cache files on startup")
+            print(f"Testing mode: Cleared {len(cache_files)} cache files on startup")
         else:
-            print("🗑️ Testing mode: No cache files to clear")
+            print("Testing mode: No cache files to clear")
     except Exception as e:
-        print(f"⚠️ Failed to clear cache on startup: {e}")
+        print(f"Failed to clear cache on startup: {e}")
 
 # Clear cache on startup for testing
 clear_cache_on_startup()
@@ -91,7 +93,7 @@ def get_bounds_and_geometry_from_geojson(geojson_path=None):
         geojson_path = DATA_DIR / 'alkmaar.geojson'
     
     try:
-        print(f"📂 Reading GeoJSON from: {geojson_path}")
+        print(f"Reading GeoJSON from: {geojson_path}")
         with open(geojson_path, 'r') as f:
             geojson_data = json.load(f)
         
@@ -128,13 +130,13 @@ def get_bounds_and_geometry_from_geojson(geojson_path=None):
         # Format for Leaflet: [[min_lat, min_lon], [max_lat, max_lon]]
         bounds = [[min_lat, min_lon], [max_lat, max_lon]]
         
-        print(f"🗺️ Municipality bounds: {bounds}")
+        print(f"Municipality bounds: {bounds}")
         print(f"   Area: {max_lat-min_lat:.4f}° × {max_lon-min_lon:.4f}°")
         
         return bounds, geometry
         
     except Exception as e:
-        print(f"⚠️ Error reading GeoJSON: {e}")
+        print(f"Error reading GeoJSON: {e}")
         # Default gemeente Alkmaar bounds
         default_bounds = [[52.55, 4.65], [52.70, 4.85]]
         default_geometry = {
@@ -145,6 +147,22 @@ def get_bounds_and_geometry_from_geojson(geojson_path=None):
             ]]
         }
         return default_bounds, default_geometry
+
+def get_bounds_from_geometry(geometry):
+    """Extract bounding box from GeoJSON geometry."""
+    if geometry['type'] == 'Polygon':
+        coords = geometry['coordinates'][0]
+    elif geometry['type'] == 'MultiPolygon':
+        coords = []
+        for poly in geometry['coordinates']:
+            coords.extend(poly[0])
+    else:
+        raise ValueError(f"Unsupported geometry type: {geometry['type']}")
+    
+    lons = [coord[0] for coord in coords]
+    lats = [coord[1] for coord in coords]
+    
+    return (min(lons), min(lats), max(lons), max(lats))
 
 # ================================
 # SURFACE WATER MASK FROM GEOJSON
@@ -157,7 +175,7 @@ def load_surface_water_mask():
     """
     surface_water_path = DATA_DIR / 'surface_water.geojson'
     try:
-        print(f"🌊 Loading surface water from: {surface_water_path}")
+        print(f"Loading surface water from: {surface_water_path}")
         water_gdf = gpd.read_file(surface_water_path)
         # Ensure CRS is WGS84 (EPSG:4326) to match Sentinel Hub data
         if water_gdf.crs != 'EPSG:4326':
@@ -165,54 +183,27 @@ def load_surface_water_mask():
         print(f"   Loaded {len(water_gdf)} water body features")
         return water_gdf
     except FileNotFoundError:
-        print(f"⚠️ Surface water file not found at {surface_water_path}")
+        print(f"Surface water file not found at {surface_water_path}")
         print("   Water mask will not be available for NDCI")
         return None
     except Exception as e:
-        print(f"⚠️ Error loading surface water data: {e}")
+        print(f"Error loading surface water data: {e}")
         return None
-
-def get_bounds_from_geometry(geometry):
-    """Extract bounding box from GeoJSON geometry."""
-    if geometry['type'] == 'Polygon':
-        coords = geometry['coordinates'][0]
-    elif geometry['type'] == 'MultiPolygon':
-        # Get all coordinates and flatten
-        coords = []
-        for poly in geometry['coordinates']:
-            coords.extend(poly[0])
-    else:
-        raise ValueError(f"Unsupported geometry type: {geometry['type']}")
-    
-    lons = [coord[0] for coord in coords]
-    lats = [coord[1] for coord in coords]
-    
-    return (min(lons), min(lats), max(lons), max(lats))
 
 def create_water_mask(image_shape, bounds, water_gdf):
     """
     Create a binary mask for water bodies using surface water GeoJSON.
-    
-    Args:
-        image_shape: tuple (height, width) of the target image
-        bounds: tuple (minx, miny, maxx, maxy) in EPSG:4326
-        water_gdf: GeoDataFrame containing water body polygons
-    
-    Returns:
-        Binary mask array where 1 = water, 0 = land
     """
     if water_gdf is None or water_gdf.empty:
-        print("⚠️ No water body data available - returning full mask")
-        return np.ones(image_shape, dtype=bool)  # Return all True (no masking)
+        print("No water body data available - returning full mask")
+        return np.ones(image_shape, dtype=bool)
     
-    # Create transform from bounds to image coordinates
     height, width = image_shape
     minx, miny, maxx, maxy = bounds
     transform = from_bounds(minx, miny, maxx, maxy, width, height)
     
-    print(f"🌊 Creating water mask from {len(water_gdf)} water bodies")
+    print(f"Creating water mask from {len(water_gdf)} water bodies")
     
-    # Rasterize water body polygons
     water_mask = rasterize(
         [(geom, 1) for geom in water_gdf.geometry if geom is not None],
         out_shape=image_shape,
@@ -227,8 +218,41 @@ def create_water_mask(image_shape, bounds, water_gdf):
     
     return water_mask.astype(bool)
 
-# Load water bodies once at startup
+# ================================
+# BGT DATA LOADING
+# ================================
+
+def load_bgt_data():
+    """Load pre-processed BGT data if available"""
+    bgt_path = DATA_DIR / 'bgt_alkmaar_processed.geojson'
+    try:
+        if bgt_path.exists():
+            print(f"Loading BGT data from: {bgt_path}")
+            bgt_gdf = gpd.read_file(bgt_path)
+            
+            # Convert to WGS84 to match satellite/radar data
+            if bgt_gdf.crs and bgt_gdf.crs != 'EPSG:4326':
+                print(f"   Converting BGT from {bgt_gdf.crs} to EPSG:4326")
+                bgt_gdf = bgt_gdf.to_crs('EPSG:4326')
+            
+            # Filter by date if needed
+            if 'creationDate' in bgt_gdf.columns:
+                bgt_gdf = bgt_gdf[
+                    (bgt_gdf["creationDate"] < "2022-05-01") & 
+                    (bgt_gdf["creationDate"] > "2019-03-01")
+                ]
+            print(f"   Loaded {len(bgt_gdf)} BGT features (2019-2022)")
+            return bgt_gdf
+        else:
+            print(f"No BGT data found at {bgt_path}")
+            return None
+    except Exception as e:
+        print(f"Error loading BGT data: {e}")
+        return None
+
+# Load water bodies and BGT data once at startup
 WATER_BODIES = load_surface_water_mask()
+BGT_DATA = load_bgt_data()
 
 # Get municipality bounds and geometry
 ALKMAAR_BOUNDS, ALKMAAR_GEOMETRY = get_bounds_and_geometry_from_geojson()
@@ -251,14 +275,14 @@ def get_sentinel_token():
         response.raise_for_status()
         return response.json()["access_token"]
     except Exception as e:
-        print(f"❌ Failed to get token: {e}")
+        print(f"Failed to get token: {e}")
         return None
 
 # ================================
 # CACHING
 # ================================
 
-def get_cache_key(layer_type, date, max_cloud, **kwargs):
+def get_cache_key(layer_type, date, max_cloud=30, **kwargs):
     """Generate cache key from parameters"""
     cache_data = f"{layer_type}_{date}_{max_cloud}_{json.dumps(kwargs, sort_keys=True)}"
     return hashlib.md5(cache_data.encode()).hexdigest()
@@ -269,9 +293,9 @@ def save_to_cache(cache_key, data):
         cache_file = CACHE_DIR / f"{cache_key}.pkl"
         with open(cache_file, 'wb') as f:
             pickle.dump(data, f)
-        print(f"💾 Cached: {cache_key[:8]}...")
+        print(f"Cached: {cache_key[:8]}...")
     except Exception as e:
-        print(f"⚠️ Cache save failed: {e}")
+        print(f"Cache save failed: {e}")
 
 def load_from_cache(cache_key):
     """Load data from cache"""
@@ -280,164 +304,14 @@ def load_from_cache(cache_key):
         if cache_file.exists():
             with open(cache_file, 'rb') as f:
                 data = pickle.load(f)
-            print(f"🎯 Cache hit: {cache_key[:8]}...")
+            print(f"Cache hit: {cache_key[:8]}...")
             return data
     except Exception as e:
-        print(f"⚠️ Cache load failed: {e}")
+        print(f"Cache load failed: {e}")
     return None
 
 # ================================
-# AVAILABLE DATES - ENHANCED WITH CLOUD COVERAGE DATA
-# ================================
-
-def get_available_dates_with_cloud_info(start_date, end_date, max_cloud=10):
-    """
-    Query Sentinel Hub catalog for available dates with cloud coverage information.
-    Returns list of dictionaries with date and cloud coverage.
-    """
-    token = get_sentinel_token()
-    if not token:
-        print("⚠️ No token available, using fallback dates")
-        return get_available_dates_fallback_with_cloud(start_date, end_date, max_cloud)
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    catalog_url = "https://sh.dataspace.copernicus.eu/api/v1/catalog/search"
-    
-    # Convert dates
-    if isinstance(start_date, str):
-        start_dt = datetime.fromisoformat(start_date)
-    else:
-        start_dt = start_date
-        
-    if isinstance(end_date, str):
-        end_dt = datetime.fromisoformat(end_date)
-    else:
-        end_dt = end_date
-    
-    start_iso = start_dt.strftime("%Y-%m-%dT00:00:00Z")
-    end_iso = end_dt.strftime("%Y-%m-%dT23:59:59Z")
-    
-    # Get bounds for search
-    bbox = [ALKMAAR_BOUNDS[0][1], ALKMAAR_BOUNDS[0][0], 
-            ALKMAAR_BOUNDS[1][1], ALKMAAR_BOUNDS[1][0]]
-    
-    search_payload = {
-        "collections": ["sentinel-2-l2a"],
-        "datetime": f"{start_iso}/{end_iso}",
-        "bbox": bbox,
-        "limit": 200,  # Increased limit to get more data
-        "query": {
-            "eo:cloud_cover": {"lt": max_cloud}
-        }
-    }
-    
-    try:
-        response = requests.post(catalog_url, headers=headers, json=search_payload, timeout=15)
-        response.raise_for_status()
-        catalog_data = response.json()
-        
-        # Group by date and get the best (lowest cloud) acquisition per day
-        date_cloud_map = {}
-        for feature in catalog_data.get('features', []):
-            date_str = feature['properties']['datetime']
-            cloud_cover = feature['properties'].get('eo:cloud_cover', 100)
-            date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-            date_key = date_obj.strftime('%Y-%m-%d')
-            
-            # Keep the acquisition with lowest cloud coverage for each date
-            if date_key not in date_cloud_map or cloud_cover < date_cloud_map[date_key]['cloud_cover']:
-                date_cloud_map[date_key] = {
-                    'date': date_key,
-                    'cloud_cover': round(cloud_cover, 1),
-                    'datetime': date_obj
-                }
-        
-        # Convert to sorted list
-        available_dates = sorted(date_cloud_map.values(), key=lambda x: x['datetime'])
-        
-        print(f"✅ Found {len(available_dates)} dates with <{max_cloud}% cloud coverage")
-        return available_dates
-        
-    except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
-        print(f"⚠️ Catalog API error ({e}), using fallback method")
-        return get_available_dates_fallback_with_cloud(start_date, end_date, max_cloud)
-    except Exception as e:
-        print(f"❌ Unexpected error querying catalog: {e}")
-        return get_available_dates_fallback_with_cloud(start_date, end_date, max_cloud)
-
-def get_available_dates_fallback_with_cloud(start_date, end_date, max_cloud=10):
-    """
-    Fallback method to generate available dates with simulated cloud coverage.
-    """
-    print("🔄 Using fallback date generation with simulated cloud data")
-    
-    # Parse dates
-    if isinstance(start_date, str):
-        start_dt = datetime.fromisoformat(start_date)
-    else:
-        start_dt = start_date
-        
-    if isinstance(end_date, str):
-        end_dt = datetime.fromisoformat(end_date)
-    else:
-        end_dt = end_date
-    
-    # Generate dates based on Sentinel-2 revisit cycle (approximately every 5 days)
-    available_dates = []
-    current_date = start_dt
-    
-    # Start with a known Sentinel-2 acquisition date and work from there
-    sentinel_start = datetime(2015, 6, 23)
-    days_diff = (start_dt - sentinel_start).days
-    
-    # Find the first acquisition date after start_date
-    cycle_day = days_diff % 5  # 5-day cycle
-    first_date = start_dt + timedelta(days=(5 - cycle_day) % 5)
-    
-    import random
-    random.seed(42)  # For consistent results
-    
-    current_date = first_date
-    while current_date <= end_dt:
-        # Only simulate low cloud coverage dates for fallback
-        cloud_cover = random.uniform(2, 8)  # Always low clouds for fallback
-        
-        available_dates.append({
-            'date': current_date.strftime('%Y-%m-%d'),
-            'cloud_cover': round(cloud_cover, 1),
-            'datetime': current_date
-        })
-        
-        current_date += timedelta(days=5)  # Every 5 days approximately
-    
-    print(f"✅ Generated {len(available_dates)} fallback dates with low cloud data")
-    return available_dates
-
-def get_latest_date_for_cloud_coverage(start_date, end_date, max_cloud=10):
-    """
-    Get the latest available date within the specified cloud coverage threshold.
-    """
-    dates_with_cloud = get_available_dates_with_cloud_info(start_date, end_date, max_cloud)
-    
-    if not dates_with_cloud:
-        return None
-    
-    # Filter by cloud coverage and get the latest date
-    suitable_dates = [d for d in dates_with_cloud if d['cloud_cover'] <= max_cloud]
-    
-    if not suitable_dates:
-        return None
-    
-    # Return the latest date
-    latest = max(suitable_dates, key=lambda x: x['datetime'])
-    return latest
-
-# ================================
-# SENTINEL HUB DATA FETCHING - WITH SURFACE WATER MASK
+# SENTINEL HUB DATA FETCHING - OPTICAL
 # ================================
 
 def fetch_sentinel_data(product_type, date, max_cloud=30, apply_water_mask=False):
@@ -462,7 +336,7 @@ def fetch_sentinel_data(product_type, date, max_cloud=30, apply_water_mask=False
     start_date = (date_obj - timedelta(days=2)).strftime("%Y-%m-%dT00:00:00Z")
     end_date = (date_obj + timedelta(days=3)).strftime("%Y-%m-%dT23:59:59Z")
     
-    print(f"🛰️ Fetching {product_type} for {date}")
+    print(f"Fetching {product_type} for {date}")
     if apply_water_mask and product_type == 'NDCI' and WATER_BODIES is not None:
         print(f"   Will apply surface water mask to NDCI")
     
@@ -487,20 +361,6 @@ def fetch_sentinel_data(product_type, date, max_cloud=30, apply_water_mask=False
                 ];
             }
         """
-    elif product_type == 'NDVI':
-        evalscript = """
-            //VERSION=3
-            function setup() {
-                return {
-                    input: ["B08", "B04", "dataMask"],
-                    output: { bands: 2 }
-                };
-            }
-            function evaluatePixel(sample) {
-                let ndvi = (sample.B08 - sample.B04) / (sample.B08 + sample.B04 + 0.001);
-                return [ndvi, sample.dataMask];
-            }
-        """
     elif product_type == 'NDCI':
         # Regular NDCI - water masking will be applied in post-processing
         evalscript = """
@@ -514,20 +374,6 @@ def fetch_sentinel_data(product_type, date, max_cloud=30, apply_water_mask=False
             function evaluatePixel(sample) {
                 let ndci = (sample.B05 - sample.B04) / (sample.B05 + sample.B04 + 0.001);
                 return [ndci, sample.dataMask];
-            }
-        """
-    elif product_type == 'NDWI':
-        evalscript = """
-            //VERSION=3
-            function setup() {
-                return {
-                    input: ["B03", "B08", "dataMask"],
-                    output: { bands: 2 }
-                };
-            }
-            function evaluatePixel(sample) {
-                let ndwi = (sample.B03 - sample.B08) / (sample.B03 + sample.B08 + 0.001);
-                return [ndwi, sample.dataMask];
             }
         """
     else:
@@ -613,19 +459,297 @@ def fetch_sentinel_data(product_type, date, max_cloud=30, apply_water_mask=False
                 data[:, :, 0] = masked_ndci
                 data[:, :, 1] = masked_alpha
                 
-                print(f"✅ Applied surface water mask to NDCI")
+                print(f"Applied surface water mask to NDCI")
         
-        print(f"✅ Successfully fetched {product_type}")
+        print(f"Successfully fetched {product_type}")
         print(f"   Shape: {data.shape}, Range: [{data.min():.3f}, {data.max():.3f}]")
         
         return data
         
     except Exception as e:
-        print(f"❌ Error fetching {product_type}: {e}")
+        print(f"Error fetching {product_type}: {e}")
         return None
 
 # ================================
-# IMAGE PROCESSING - SIMPLIFIED
+# SENTINEL-1 RADAR DATA FETCHING (FROM PROJECT.PY)
+# ================================
+
+def fetch_sentinel1_product(product_type, start_date, orbit_direction="DESCENDING"):
+    """
+    Fetch Sentinel-1 radar products (from radar_copernicus_test.py).
+    
+    Args:
+        product_type: str - 'VV', 'VH', 'RGB_VV_VH'
+        start_date: str - ISO date string (YYYY-MM-DD)
+        orbit_direction: str - 'ASCENDING' or 'DESCENDING'
+    
+    Returns:
+        numpy array with the requested product
+    """
+    
+    token = get_sentinel_token()
+    if not token:
+        return None
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    # Convert dates to proper format
+    if isinstance(start_date, str):
+        start_dt = datetime.fromisoformat(start_date)
+    else:
+        start_dt = start_date
+    
+    # Create a month-wide window for radar data
+    end_dt = start_dt + timedelta(days=30)
+    
+    start_iso = start_dt.strftime("%Y-%m-%dT00:00:00Z")
+    end_iso = end_dt.strftime("%Y-%m-%dT23:59:59Z")
+    
+    print(f"Fetching Sentinel-1 {product_type} for {start_date}")
+    
+    # Create evalscript based on product type - Fixed for UINT8
+    if product_type == 'VV':
+        evalscript = """
+        //VERSION=3
+        function setup() {
+            return {
+                input: ["VV"],
+                output: { 
+                    bands: 1,
+                    sampleType: "UINT8"
+                }
+            };
+        }
+        function evaluatePixel(sample) {
+            // Convert to dB, handle zero/negative values
+            let vv_linear = Math.max(sample.VV, 0.0001);
+            let vv_db = 10 * Math.log(vv_linear) / Math.LN10;
+            
+            // Normalize dB values to 0-1 range (typical range -25 to 0 dB)
+            let normalized = Math.max(0, Math.min(1, (vv_db + 25) / 25));
+            
+            return [normalized * 255];
+        }
+        """
+    elif product_type == 'VH':
+        evalscript = """
+        //VERSION=3
+        function setup() {
+            return {
+                input: ["VH"],
+                output: { 
+                    bands: 1,
+                    sampleType: "UINT8"
+                }
+            };
+        }
+        function evaluatePixel(sample) {
+            // Convert to dB, handle zero/negative values
+            let vh_linear = Math.max(sample.VH, 0.0001);
+            let vh_db = 10 * Math.log(vh_linear) / Math.LN10;
+            
+            // Normalize dB values to 0-1 range (typical range -30 to -5 dB for VH)
+            let normalized = Math.max(0, Math.min(1, (vh_db + 30) / 25));
+            
+            return [normalized * 255];
+        }
+        """
+    elif product_type == 'RGB_VV_VH':
+        evalscript = """
+        //VERSION=3
+        function setup() {
+            return {
+                input: ["VV", "VH"],
+                output: { 
+                    bands: 3,
+                    sampleType: "UINT8"
+                }
+            };
+        }
+        function evaluatePixel(sample) {
+            // Convert to dB and normalize for RGB display
+            let vv_linear = Math.max(sample.VV, 0.0001);
+            let vh_linear = Math.max(sample.VH, 0.0001);
+            
+            let vv_db = 10 * Math.log(vv_linear) / Math.LN10;
+            let vh_db = 10 * Math.log(vh_linear) / Math.LN10;
+            
+            // Normalize to 0-1 range
+            let vv_norm = Math.max(0, Math.min(1, (vv_db + 25) / 25));
+            let vh_norm = Math.max(0, Math.min(1, (vh_db + 30) / 25));
+            
+            return [vv_norm * 255, vh_norm * 255, (vv_norm + vh_norm) * 127];
+        }
+        """
+    
+    # Payload for Sentinel Hub API
+    payload = {
+        "input": {
+            "bounds": {
+                "geometry": ALKMAAR_GEOMETRY,
+                "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"},
+            },
+            "data": [
+                {
+                    "type": "S1GRD",
+                    "dataFilter": {
+                        "timeRange": {"from": start_iso, "to": end_iso},
+                        "orbitDirection": orbit_direction
+                    },
+                    "processing": {
+                        "mosaickingOrder": "mostRecent"
+                    },
+                }
+            ],
+        },
+        "evalscript": evalscript,
+        "output": {
+            "width": 2048,
+            "height": 2048,
+            "responses": [{"identifier": "default", "format": {"type": "image/png"}}],
+        },
+    }
+    
+    try:
+        # Fetch data
+        response = requests.post(PROCESS_URL, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code != 200:
+            print(f"Error {response.status_code}: {response.text}")
+            return None
+        
+        # Process PNG image
+        img = Image.open(io.BytesIO(response.content))
+        arr = np.array(img, dtype=np.float32)
+        
+        # Scale from 0-255 to 0-1 range
+        arr = arr / 255.0
+        
+        # Convert back to dB for single band data (VV/VH)
+        if product_type == 'VV':
+            # Convert normalized values back to dB range (-25 to 0 dB)
+            arr = (arr * 25) - 25
+        elif product_type == 'VH':
+            # Convert normalized values back to dB range (-30 to -5 dB)
+            arr = (arr * 25) - 30
+        # For RGB, keep 0-1 range
+        
+        print(f"Successfully fetched Sentinel-1 {product_type}")
+        print(f"   Shape: {arr.shape}, Range: [{np.nanmin(arr):.3f}, {np.nanmax(arr):.3f}]")
+        
+        return arr
+        
+    except Exception as e:
+        print(f"Error fetching Sentinel-1 data: {e}")
+        return None
+
+# ================================
+# RADAR CHANGE DETECTION (FROM PROJECT.PY)
+# ================================
+
+def detect_radar_changes(date1='2019-06-01', date2='2022-06-01', threshold=0.05):
+    """
+    Detect changes using radar data (simplified from Project.py).
+    
+    Args:
+        date1: str - Reference date
+        date2: str - Comparison date  
+        threshold: float - Change threshold
+    
+    Returns:
+        dict with change detection results
+    """
+    print(f"Detecting radar changes between {date1} and {date2}")
+    
+    # Check cache first
+    cache_key = get_cache_key('radar_change', f"{date1}_{date2}", threshold=threshold)
+    cached_result = load_from_cache(cache_key)
+    if cached_result is not None:
+        return cached_result
+    
+    try:
+        # Fetch radar data for both dates
+        print("Fetching reference radar data...")
+        ref_data = fetch_sentinel1_product(
+            product_type='VV',
+            start_date=date1,
+            orbit_direction='DESCENDING'
+        )
+        
+        print("Fetching comparison radar data...")
+        comp_data = fetch_sentinel1_product(
+            product_type='VV',
+            start_date=date2,
+            orbit_direction='DESCENDING'
+        )
+        
+        if ref_data is None or comp_data is None:
+            print("Failed to fetch radar data")
+            return None
+        
+        # Calculate change map
+        change_map = comp_data - ref_data
+        
+        # Apply threshold for positive changes (potential construction)
+        positive_changes_mask = change_map > threshold
+        
+        # Calculate statistics
+        total_positive = np.sum(positive_changes_mask)
+        total_pixels = change_map.size
+        positive_percentage = (total_positive / total_pixels) * 100
+        
+        print(f"Radar change detection complete")
+        print(f"   Positive changes: {positive_percentage:.3f}% of area")
+        
+        result = {
+            'reference_data': ref_data,
+            'comparison_data': comp_data,
+            'change_map': change_map,
+            'positive_changes_mask': positive_changes_mask,
+            'statistics': {
+                'total_positive': int(total_positive),
+                'total_pixels': int(total_pixels),
+                'positive_percentage': float(positive_percentage)
+            },
+            'dates': {'reference': date1, 'comparison': date2}
+        }
+        
+        # Cache the result
+        save_to_cache(cache_key, result)
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in radar change detection: {e}")
+        return None
+
+def detect_illegal_construction_radar(date1='2019-06-01', date2='2022-06-01'):
+    """
+    Detect potential illegal construction using radar + BGT (from Project.py).
+    Now accepts custom dates as parameters.
+    """
+    print(f"Detecting potential illegal construction ({date1} to {date2})")
+    
+    # Get radar changes for the specified dates
+    radar_results = detect_radar_changes(date1, date2, threshold=0.05)
+    
+    if radar_results is None:
+        return None
+    
+    # Prepare result
+    result = {
+        'radar_changes': radar_results,
+        'bgt_available': BGT_DATA is not None,
+        'bgt_features': len(BGT_DATA) if BGT_DATA is not None else 0
+    }
+    
+    return result
+
+# ================================
+# IMAGE PROCESSING
 # ================================
 
 def array_to_base64_image(data, product_type='RGB', opacity=0.8):
@@ -687,7 +811,7 @@ def array_to_base64_image(data, product_type='RGB', opacity=0.8):
                 return None
                 
         else:
-            # Handle index products (NDVI, NDCI, NDWI)
+            # Handle index products (NDCI)
             alpha = None
             water_mask_applied = False
             
@@ -718,7 +842,7 @@ def array_to_base64_image(data, product_type='RGB', opacity=0.8):
                 alpha = ((index_data != 0) & ~np.isnan(index_data)) * opacity
             
             # Normalize to 0-1 for colormap
-            if product_type in ['NDVI', 'NDCI', 'NDWI']:
+            if product_type == 'NDCI':
                 # Indices are in range -1 to 1
                 index_norm = (index_data + 1) / 2
             else:
@@ -737,12 +861,8 @@ def array_to_base64_image(data, product_type='RGB', opacity=0.8):
             index_norm = np.clip(index_norm, 0, 1)
             
             # Apply colormap
-            if product_type == 'NDVI':
-                cmap = plt.cm.RdYlGn
-            elif product_type == 'NDCI':
+            if product_type == 'NDCI':
                 cmap = plt.cm.RdYlBu_r
-            elif product_type == 'NDWI':
-                cmap = plt.cm.BrBG
             else:
                 cmap = plt.cm.viridis
             
@@ -756,7 +876,7 @@ def array_to_base64_image(data, product_type='RGB', opacity=0.8):
             image = Image.fromarray(rgba, mode='RGBA')
             
             if water_mask_applied:
-                print(f"✅ Surface water mask applied to {product_type}")
+                print(f"Surface water mask applied to {product_type}")
         
         # Convert to base64
         buffer = io.BytesIO()
@@ -764,13 +884,79 @@ def array_to_base64_image(data, product_type='RGB', opacity=0.8):
         buffer.seek(0)
         
         img_base64 = base64.b64encode(buffer.getvalue()).decode()
-        print(f"✅ Image created successfully with transparent background")
+        print(f"Image created successfully with transparent background")
         return img_base64
         
     except Exception as e:
-        print(f"❌ Error creating image: {e}")
+        print(f"Error creating image: {e}")
         import traceback
         traceback.print_exc()
+        return None
+
+def create_illegal_construction_visualization(radar_results, include_bgt=False):
+    """Create visualization for illegal construction detection with optional BGT overlay"""
+    
+    if radar_results is None:
+        return None
+    
+    try:
+        # Extract data
+        if 'radar_changes' in radar_results:
+            # This is from illegal construction detection
+            change_data = radar_results['radar_changes']
+        else:
+            # Direct radar change result
+            change_data = radar_results
+        
+        positive_changes_mask = change_data['positive_changes_mask']
+        
+        # Create RGBA image
+        height, width = positive_changes_mask.shape
+        rgba = np.zeros((height, width, 4), dtype=np.uint8)
+        
+        # Set red for positive changes (potential construction)
+        rgba[positive_changes_mask, 0] = 255  # Red channel
+        rgba[positive_changes_mask, 3] = 200  # Alpha
+        
+        # If BGT overlay requested and available - PROPERLY RASTERIZE BGT
+        if include_bgt and BGT_DATA is not None:
+            try:
+                # Get bounds and create transform
+                bounds = get_bounds_from_geometry(ALKMAAR_GEOMETRY)
+                transform = from_bounds(bounds[0], bounds[1], bounds[2], bounds[3], width, height)
+                
+                # Rasterize BGT polygons to same resolution as radar
+                bgt_mask = rasterize(
+                    [(geom, 1) for geom in BGT_DATA.geometry if geom is not None],
+                    out_shape=(height, width),
+                    transform=transform,
+                    fill=0,
+                    dtype='uint8'
+                )
+                
+                # Add green overlay for BGT areas
+                rgba[bgt_mask > 0, 1] = 255  # Green channel for legal construction
+                rgba[bgt_mask > 0, 3] = 200  # Alpha
+                
+                print(f"Added BGT overlay: {np.sum(bgt_mask > 0)} pixels")
+                
+            except Exception as e:
+                print(f"Could not add BGT overlay: {e}")
+        
+        # Create PIL image
+        image = Image.fromarray(rgba, mode='RGBA')
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        return img_base64
+        
+    except Exception as e:
+        print(f"Error creating illegal construction visualization: {e}")
         return None
 
 # ================================
@@ -799,7 +985,7 @@ def get_satellite_data():
     try:
         data = request.get_json()
         product_type = data.get('product_type', 'RGB')
-        date = data.get('date')  # No default date - should come from frontend
+        date = data.get('date')
         opacity = data.get('opacity', 0.8)
         
         # Validate required parameters
@@ -819,7 +1005,7 @@ def get_satellite_data():
         # No max cloud constraint - use 100% to get any available data
         max_cloud = 100
         
-        print(f"\n📡 Request: {product_type} for {date} (no cloud limit, opacity: {opacity})")
+        print(f"\nRequest: {product_type} for {date} (no cloud limit, opacity: {opacity})")
         if apply_water_mask and product_type == 'NDCI':
             print(f"   Surface water mask will be applied")
         
@@ -863,7 +1049,49 @@ def get_satellite_data():
         })
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/illegal-construction', methods=['POST'])
+def get_illegal_construction():
+    """Detect potential illegal construction using radar + BGT"""
+    try:
+        data = request.get_json()
+        # Get dates from request - now customizable
+        date1 = data.get('date1', '2019-06-01')
+        date2 = data.get('date2', '2022-06-01')
+        
+        print(f"\nIllegal construction detection ({date1} to {date2})")
+        
+        # Detect illegal construction with specified dates
+        results = detect_illegal_construction_radar(date1, date2)
+        
+        if results is None:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to detect illegal construction'
+            }), 500
+        
+        # Create visualization with BGT overlay indication
+        image_b64 = create_illegal_construction_visualization(results, include_bgt=True)
+        
+        if image_b64 is None:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create visualization'
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'imageUrl': f'data:image/png;base64,{image_b64}',
+            'bounds': ALKMAAR_BOUNDS,
+            'bgt_features': results['bgt_features'],
+            'statistics': results['radar_changes']['statistics'],
+            'dates': {'from': date1, 'to': date2}
+        })
+        
+    except Exception as e:
+        print(f"Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/clear-cache', methods=['POST'])
@@ -886,7 +1114,7 @@ def clear_cache():
                     count += 1
             message = f"Cleared {count} cache files for {product_type}"
         
-        print(f"🗑️ {message}")
+        print(f"{message}")
         return jsonify({'success': True, 'message': message})
         
     except Exception as e:
@@ -898,6 +1126,9 @@ def get_info():
     water_info = "available" if WATER_BODIES is not None else "not available"
     water_count = len(WATER_BODIES) if WATER_BODIES is not None else 0
     
+    bgt_info = "available" if BGT_DATA is not None else "not available"
+    bgt_count = len(BGT_DATA) if BGT_DATA is not None else 0
+    
     return jsonify({
         'bounds': ALKMAAR_BOUNDS,
         'bounds_source': 'alkmaar.geojson' if (DATA_DIR / 'alkmaar.geojson').exists() else 'default',
@@ -906,7 +1137,9 @@ def get_info():
         'area_km2': round((ALKMAAR_BOUNDS[1][1] - ALKMAAR_BOUNDS[0][1]) * 
                           (ALKMAAR_BOUNDS[1][0] - ALKMAAR_BOUNDS[0][0]) * 111 * 111, 1),
         'surface_water': water_info,
-        'water_bodies_count': water_count
+        'water_bodies_count': water_count,
+        'bgt_data': bgt_info,
+        'bgt_features': bgt_count
     })
 
 # ================================
@@ -915,49 +1148,61 @@ def get_info():
 
 def main(port=5000, debug=True):
     """Run the web interface"""
-    print("🚀 Alkmaar Municipality Satellite Analysis")
+    print("Alkmaar Municipality Satellite & Radar Analysis")
     print("=" * 60)
     
-    print(f"\n🗺️ Municipality Coverage:")
+    print(f"\nMunicipality Coverage:")
     print(f"   Bounds: {ALKMAAR_BOUNDS}")
     area_km2 = (ALKMAAR_BOUNDS[1][1] - ALKMAAR_BOUNDS[0][1]) * \
                (ALKMAAR_BOUNDS[1][0] - ALKMAAR_BOUNDS[0][0]) * 111 * 111
     print(f"   Area: ~{area_km2:.1f} km²")
     
-    print(f"\n🌊 Surface Water Data:")
+    print(f"\nSurface Water Data:")
     if WATER_BODIES is not None:
-        print(f"   ✅ Loaded {len(WATER_BODIES)} water body features")
-        print(f"   ✅ Water mask available for NDCI")
+        print(f"   Loaded {len(WATER_BODIES)} water body features")
+        print(f"   Water mask available for NDCI")
     else:
-        print(f"   ⚠️ No surface water data found")
-        print(f"   ⚠️ Water mask will not be available")
+        print(f"   No surface water data found")
+        print(f"   Water mask will not be available")
+    
+    print(f"\nBGT Data:")
+    if BGT_DATA is not None:
+        print(f"   Loaded {len(BGT_DATA)} BGT features (2019-2022)")
+        print(f"   Legal construction data available")
+        print(f"   Green overlay will show on illegal construction detection")
+    else:
+        print(f"   No BGT data found")
+        print(f"   Illegal construction detection will use radar only")
     
     # Test connection
-    print(f"\n📡 Testing Sentinel Hub connection...")
+    print(f"\nTesting Sentinel Hub connection...")
     token = get_sentinel_token()
     if token:
-        print(f"   ✅ Successfully authenticated")
+        print(f"   Successfully authenticated")
     else:
-        print(f"   ❌ Authentication failed")
+        print(f"   Authentication failed")
     
-    print(f"\n📡 API Endpoints:")
-    print(f"   POST /api/satellite-data")
-    print(f"   POST /api/clear-cache")
-    print(f"   GET  /api/info")
+    print(f"\nAPI Endpoints:")
+    print(f"   POST /api/satellite-data      - Optical imagery (RGB, NDCI)")
+    print(f"   POST /api/illegal-construction - Illegal construction analysis")
+    print(f"   POST /api/clear-cache        - Clear cache")
+    print(f"   GET  /api/info              - System information")
     
-    print(f"\n🌐 Starting server on http://localhost:{port}")
-    print(f"\n💡 Tips:")
+    print(f"\nStarting server on http://localhost:{port}")
+    print(f"\nTips:")
     print(f"   • Cache is cleared on startup for testing")
-    print(f"   • Available dates use fallback if catalog API is down")
-    print(f"   • Surface water mask applied to NDCI when requested")
-    print(f"   • Try dates with <30% cloud for best results")
+    print(f"   • All date ranges are now customizable")
+    print(f"   • BGT data shows as green overlay")
+    print(f"   • Red areas = radar-detected changes")
+    print(f"   • Green areas = BGT documented (legal)")
+    print(f"   • Red without green = potential illegal")
     
     print(f"\nPress Ctrl+C to stop the server")
     
     try:
         app.run(host='0.0.0.0', port=port, debug=debug)
     except KeyboardInterrupt:
-        print(f"\n🛑 Server stopped")
+        print(f"\nServer stopped")
 
 if __name__ == "__main__":
     main()

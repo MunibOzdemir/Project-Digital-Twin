@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alkmaar Municipality - Satellite Analysis</title>
+    <title>Alkmaar Municipality - Satellite & Radar Analysis</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { 
@@ -103,195 +103,25 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
-        .date-input.has-data {
-            background: #d4edda;
-            border-color: #28a745;
-        }
-        
-        .date-input.no-data {
-            background: #f8d7da;
-            border-color: #dc3545;
-        }
-        
-        /* Cloud coverage slider */
-        .slider-container {
-            margin: 15px 0;
-        }
-        
-        .slider-label {
+        /* Date range for radar */
+        .date-range {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 13px;
-            color: #6c757d;
-        }
-        
-        .cloud-slider {
-            width: 100%;
-            height: 6px;
-            border-radius: 3px;
-            background: #dee2e6;
-            outline: none;
-            -webkit-appearance: none;
-        }
-        
-        .cloud-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-        
-        .cloud-slider::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-        
-        /* Latest date section (Copernicus style) */
-        .latest-date-section {
-            background: #e7f3ff;
-            border: 1px solid #bee5eb;
-            border-radius: 6px;
-            padding: 12px;
+            gap: 10px;
             margin-bottom: 15px;
         }
         
-        .latest-date-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #0c5460;
+        .date-group {
+            flex: 1;
         }
         
-        .latest-date-info {
+        .date-group label {
+            display: block;
             font-size: 12px;
-            color: #0c5460;
-            line-height: 1.4;
-        }
-        
-        .use-latest-btn {
-            padding: 6px 12px;
-            background: #17a2b8;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        
-        .use-latest-btn:hover {
-            background: #138496;
-            transform: translateY(-1px);
-        }
-        
-        /* Available dates display */
-        .available-dates {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 12px;
-            max-height: 200px;
-            overflow-y: auto;
-            padding: 10px;
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-        }
-        
-        .date-chip {
-            padding: 4px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            cursor: pointer;
-            border: 1px solid transparent;
-            transition: all 0.2s ease;
-            position: relative;
-        }
-        
-        .date-chip:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-        }
-        
-        .date-chip.excellent {
-            background: #d4edda;
-            color: #155724;
-            border-color: #c3e6cb;
-        }
-        
-        .date-chip.good {
-            background: #fff3cd;
-            color: #856404;
-            border-color: #ffeaa7;
-        }
-        
-        .date-chip.acceptable {
-            background: #ffeaa7;
-            color: #856404;
-            border-color: #ffdf7e;
-        }
-        
-        .date-chip.cloudy {
-            background: #f8d7da;
-            color: #721c24;
-            border-color: #f5c6cb;
-        }
-        
-        .date-chip.selected {
-            background: #667eea;
-            color: white;
-            border-color: #5a67d8;
-            font-weight: 600;
-        }
-        
-        /* Cloud percentage badge */
-        .cloud-badge {
-            position: absolute;
-            top: -6px;
-            right: -6px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            border-radius: 8px;
-            padding: 1px 4px;
-            font-size: 9px;
-            font-weight: bold;
-        }
-        
-        /* Legend */
-        .legend {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 10px;
-            font-size: 11px;
             color: #6c757d;
+            margin-bottom: 4px;
         }
         
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        
-        .legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-        }
-        
-        /* Layer controls with checkboxes */
+        /* Layer controls */
         .layer-item {
             display: flex;
             align-items: center;
@@ -373,21 +203,6 @@
             color: #6c757d;
             min-width: 30px;
             text-align: right;
-        }
-        
-        /* Water mask option */
-        .water-mask-option {
-            display: flex;
-            align-items: center;
-            padding: 8px;
-            margin-top: 8px;
-            background: #e7f3ff;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-        
-        .water-mask-option input {
-            margin-right: 8px;
         }
         
         /* Buttons */
@@ -503,30 +318,7 @@
             to { transform: rotate(360deg); }
         }
         
-        /* Scrollbar styling */
-        .available-dates::-webkit-scrollbar,
-        .sidebar-content::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        .available-dates::-webkit-scrollbar-track,
-        .sidebar-content::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 3px;
-        }
-        
-        .available-dates::-webkit-scrollbar-thumb,
-        .sidebar-content::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 3px;
-        }
-        
-        .available-dates::-webkit-scrollbar-thumb:hover,
-        .sidebar-content::-webkit-scrollbar-thumb:hover {
-            background: #555;
-        }
-        
-        /* Floating map controls */
+        /* Map info */
         .map-info {
             position: absolute;
             bottom: 20px;
@@ -562,20 +354,65 @@
         .active-layer-item {
             padding: 4px 0;
             color: #6c757d;
+        }
+        
+        /* Legend */
+        .legend {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            margin-top: 15px;
+        }
+        
+        .legend h4 {
+            font-size: 13px;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+        }
+        
+        /* NDCI Legend */
+        .ndci-legend {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            margin-top: 10px;
+        }
+        
+        .ndci-legend h4 {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: #495057;
+        }
+        
+        .color-scale {
+            height: 20px;
+            background: linear-gradient(to right, #313695, #4575b4, #74add1, #abd9e9, #e0f3f8, #ffffcc, #fee090, #fdae61, #f46d43, #d73027, #a50026);
+            border-radius: 3px;
+            margin-bottom: 5px;
+        }
+        
+        .scale-labels {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-        }
-        
-        .active-layer-item .layer-type {
-            font-weight: 500;
-        }
-        
-        .active-layer-item .layer-opacity {
             font-size: 10px;
-            background: #e9ecef;
-            padding: 2px 6px;
-            border-radius: 10px;
+            color: #6c757d;
         }
         
         /* Responsive design */
@@ -588,12 +425,6 @@
             .app-container {
                 flex-direction: column;
             }
-            
-            .active-layers-list {
-                top: 10px;
-                right: 10px;
-                font-size: 11px;
-            }
         }
     </style>
 </head>
@@ -602,33 +433,33 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header">
-                <h1>🛰️ Gemeente Alkmaar</h1>
-                <p>Satellite Imagery Analysis Platform</p>
+                <h1>Gemeente Alkmaar</h1>
+                <p>Satellite Imagery & Radar Analysis Platform</p>
             </div>
             
             <div class="sidebar-content">
-                <!-- Date Selection -->
+                <!-- Date Selection for Optical -->
                 <div class="control-section">
-                    <h3>📅 Date Selection</h3>
+                    <h3>Date Selection</h3>
                     
                     <div class="date-selector">
                         <input type="date" id="selected-date" class="date-input" value="2024-06-01">
                     </div>
                     
                     <button class="btn btn-secondary" onclick="clearCache()" style="width: 100%; margin-top: 10px;">
-                        🗑️ Clear Image Cache
+                        Clear Image Cache
                     </button>
                 </div>
                 
-                <!-- Layer Controls with Checkboxes -->
+                <!-- Optical Layers -->
                 <div class="control-section">
-                    <h3>🗺️ Satellite Layers</h3>
+                    <h3>Satellite Layers</h3>
                     
                     <!-- RGB Layer -->
                     <div class="layer-item" id="layer-rgb">
                         <input type="checkbox" class="layer-checkbox" id="checkbox-rgb" onchange="toggleLayer('RGB')">
                         <div class="layer-info">
-                            <div class="layer-name">🖼️ RGB (True Color)</div>
+                            <div class="layer-name">RGB (True Color)</div>
                             <div class="layer-description">Natural color composite</div>
                         </div>
                         <div class="layer-controls">
@@ -638,25 +469,11 @@
                         </div>
                     </div>
                     
-                    <!-- NDVI Layer -->
-                    <div class="layer-item" id="layer-ndvi">
-                        <input type="checkbox" class="layer-checkbox" id="checkbox-ndvi" onchange="toggleLayer('NDVI')">
-                        <div class="layer-info">
-                            <div class="layer-name">🌱 NDVI</div>
-                            <div class="layer-description">Vegetation health index</div>
-                        </div>
-                        <div class="layer-controls">
-                            <input type="range" class="opacity-slider" id="opacity-ndvi" 
-                                   min="0" max="100" value="80" onchange="updateOpacity('NDVI')">
-                            <span class="opacity-value" id="opacity-value-ndvi">80%</span>
-                        </div>
-                    </div>
-                    
                     <!-- NDCI Layer -->
                     <div class="layer-item" id="layer-ndci">
                         <input type="checkbox" class="layer-checkbox" id="checkbox-ndci" onchange="toggleLayer('NDCI')">
                         <div class="layer-info">
-                            <div class="layer-name">💧 NDCI (Water Bodies)</div>
+                            <div class="layer-name">NDCI (Water Bodies)</div>
                             <div class="layer-description">Chlorophyll concentration in water</div>
                         </div>
                         <div class="layer-controls">
@@ -666,28 +483,67 @@
                         </div>
                     </div>
                     
-                    <!-- NDWI Layer -->
-                    <div class="layer-item" id="layer-ndwi">
-                        <input type="checkbox" class="layer-checkbox" id="checkbox-ndwi" onchange="toggleLayer('NDWI')">
-                        <div class="layer-info">
-                            <div class="layer-name">🌊 NDWI</div>
-                            <div class="layer-description">Water content index</div>
-                        </div>
-                        <div class="layer-controls">
-                            <input type="range" class="opacity-slider" id="opacity-ndwi" 
-                                   min="0" max="100" value="80" onchange="updateOpacity('NDWI')">
-                            <span class="opacity-value" id="opacity-value-ndwi">80%</span>
+                    <!-- NDCI Legend -->
+                    <div class="ndci-legend" id="ndci-legend" style="display: none;">
+                        <h4>NDCI Scale</h4>
+                        <div class="color-scale"></div>
+                        <div class="scale-labels">
+                            <span>-1.0</span>
+                            <span>Low</span>
+                            <span>High</span>
+                            <span>1.0</span>
                         </div>
                     </div>
                     
                     <button class="btn btn-danger" onclick="clearAllLayers()" style="width: 100%; margin-top: 10px;">
-                        ❌ Clear All Layers
+                        Clear All Layers
                     </button>
+                </div>
+                
+                <!-- Illegal Construction Detection -->
+                <div class="control-section">
+                    <h3>Illegal Construction Detection</h3>
+                    <p style="font-size: 12px; color: #6c757d; margin-bottom: 15px;">
+                        Compares radar-detected changes with BGT legal construction permits
+                    </p>
+                    
+                    <!-- Add customizable dates for illegal construction -->
+                    <div class="date-range">
+                        <div class="date-group">
+                            <label>Reference Date</label>
+                            <input type="date" id="illegal-date1" class="date-input" value="2019-06-01">
+                        </div>
+                        <div class="date-group">
+                            <label>Comparison Date</label>
+                            <input type="date" id="illegal-date2" class="date-input" value="2022-06-01">
+                        </div>
+                    </div>
+                    
+                    <!-- Illegal Construction Checkbox -->
+                    <div class="layer-item" id="layer-illegal">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-illegal" onchange="toggleIllegalLayer()">
+                        <div class="layer-info">
+                            <div class="layer-name">Show Illegal Construction</div>
+                            <div class="layer-description">Radar + BGT analysis</div>
+                        </div>
+                    </div>
+                    
+                    <div class="legend">
+                        <h4>Legend</h4>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(255, 0, 0, 0.8);"></div>
+                            <span>Radar-detected changes</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(0, 255, 0, 0.8);"></div>
+                            <span>BGT documented (legal)</span>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Info Box -->
                 <div class="control-section">
-                    <h3>ℹ️ Coverage Area</h3>
+                    <h3>Coverage Area</h3>
                     <div class="info-box">
                         <strong>Municipality Bounds:</strong>
                         <div class="bounds-info" id="bounds-info">
@@ -725,16 +581,14 @@
     <script>
         // Global variables
         let map;
-        let layers = {};  // Store all layers with their overlays
+        let layers = {};
         let municipalityBounds = null;
-        let boundsRectangle = null;
         
         // Layer configurations
         const layerConfigs = {
-            'RGB': { icon: '🖼️', color: '#667eea', description: 'True Color' },
-            'NDVI': { icon: '🌱', color: '#28a745', description: 'Vegetation' },
-            'NDCI': { icon: '💧', color: '#17a2b8', description: 'Chlorophyll' },
-            'NDWI': { icon: '🌊', color: '#007bff', description: 'Water Content' }
+            'RGB': { icon: '', description: 'True Color' },
+            'NDCI': { icon: '', description: 'Chlorophyll' },
+            'illegal-construction': { icon: '', description: 'Illegal Construction' }
         };
         
         // Initialize application
@@ -766,62 +620,17 @@
             // Set up event listeners
             setupEventListeners();
             
-            // Enable RGB layer by default once we have a valid date
-            await enableDefaultLayers();
-            
-            updateStatus('Application ready - Select a date and choose layers', 'success');
-        }
-        
-        // Enable default layers (RGB by default)
-        async function enableDefaultLayers() {
-            // Wait a bit to ensure date is loaded
+            // Enable RGB layer by default
             setTimeout(async () => {
                 const selectedDate = document.getElementById('selected-date').value;
                 if (selectedDate && selectedDate !== '') {
-                    // Check RGB checkbox and load it
                     document.getElementById('checkbox-rgb').checked = true;
                     await toggleLayer('RGB');
                     updateStatus('RGB layer loaded by default', 'success');
                 }
             }, 1000);
-        }
-        
-        // Load latest date info (low cloud coverage only)
-        async function loadLatestDateInfo() {
-            try {
-                const response = await fetch(`/api/latest-date`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    latestDateInfo = result;
-                    
-                    document.getElementById('latest-date-info').innerHTML = `
-                        <strong>${result.latest_date}</strong> - ${result.cloud_coverage.toFixed(1)}% cloud coverage
-                        <br>Latest date with excellent quality in last 30 days
-                    `;
-                    document.getElementById('latest-date-section').style.display = 'block';
-                } else {
-                    document.getElementById('latest-date-info').innerHTML = `
-                        No excellent quality dates found in the last 30 days
-                    `;
-                    document.getElementById('latest-date-section').style.display = 'block';
-                }
-            } catch (e) {
-                console.error('Error loading latest date:', e);
-                document.getElementById('latest-date-section').style.display = 'none';
-            }
-        }
-        
-        // Use latest date
-        function useLatestDate() {
-            if (latestDateInfo && latestDateInfo.latest_date) {
-                document.getElementById('selected-date').value = latestDateInfo.latest_date;
-                updateDateChips(latestDateInfo.latest_date);
-                checkDateAvailability(latestDateInfo.latest_date);
-                // Reload active layers with new date
-                reloadActiveLayers();
-                updateStatus(`Using latest date: ${latestDateInfo.latest_date} (${latestDateInfo.cloud_coverage.toFixed(1)}% cloud)`, 'success');
-            }
+            
+            updateStatus('Application ready', 'success');
         }
         
         // Load system information
@@ -841,26 +650,15 @@
                 
                 if (info.surface_water === 'available') {
                     boundsText += `<br>Water bodies: ${info.water_bodies_count} features`;
+                }
+                
+                if (info.bgt_data === 'available') {
+                    boundsText += `<br>BGT features: ${info.bgt_features}`;
                 } else {
-                    boundsText += `<br>⚠️ No surface water data`;
+                    boundsText += `<br>No BGT data`;
                 }
                 
                 document.getElementById('bounds-info').innerHTML = boundsText;
-                
-                // Draw municipality boundary
-                if (boundsRectangle) {
-                    map.removeLayer(boundsRectangle);
-                }
-                
-                boundsRectangle = L.rectangle(municipalityBounds, {
-                    color: "#ff7800",
-                    weight: 2,
-                    fillOpacity: 0.05,
-                    dashArray: '5, 10'
-                });
-                
-                boundsRectangle.addTo(map);
-                boundsRectangle.bindPopup("Gemeente Alkmaar boundary");
                 
                 // Fit map to bounds
                 map.fitBounds(municipalityBounds);
@@ -871,18 +669,42 @@
             }
         }
         
-        // Toggle layer on/off
+        // Toggle optical layer
         async function toggleLayer(productType) {
             const checkbox = document.getElementById(`checkbox-${productType.toLowerCase()}`);
             const layerItem = document.getElementById(`layer-${productType.toLowerCase()}`);
             
             if (checkbox.checked) {
-                // Load and add layer
                 await loadLayer(productType);
                 layerItem.classList.add('active');
+                
+                // Show NDCI legend if NDCI layer is activated
+                if (productType === 'NDCI') {
+                    document.getElementById('ndci-legend').style.display = 'block';
+                }
             } else {
-                // Remove layer
                 removeLayer(productType);
+                layerItem.classList.remove('active');
+                
+                // Hide NDCI legend if NDCI layer is deactivated
+                if (productType === 'NDCI') {
+                    document.getElementById('ndci-legend').style.display = 'none';
+                }
+            }
+            
+            updateActiveLayersList();
+        }
+        
+        // Toggle illegal construction layer
+        async function toggleIllegalLayer() {
+            const checkbox = document.getElementById('checkbox-illegal');
+            const layerItem = document.getElementById('layer-illegal');
+            
+            if (checkbox.checked) {
+                await detectIllegalConstruction();
+                layerItem.classList.add('active');
+            } else {
+                removeLayer('illegal-construction');
                 layerItem.classList.remove('active');
             }
             
@@ -894,9 +716,6 @@
             const date = document.getElementById('selected-date').value;
             const opacity = document.getElementById(`opacity-${productType.toLowerCase()}`).value / 100;
             
-            // NDCI always uses water mask by default (no UI option needed)
-            const applyWaterMask = (productType === 'NDCI');
-            
             updateStatus(`Loading ${productType} for ${date}...`);
             document.querySelector('.sidebar').classList.add('loading');
             
@@ -907,7 +726,6 @@
                     body: JSON.stringify({
                         product_type: productType,
                         date: date,
-                        apply_water_mask: applyWaterMask,
                         opacity: opacity
                     })
                 });
@@ -915,46 +733,21 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    // Remove existing layer if present
-                    if (layers[productType]) {
-                        map.removeLayer(layers[productType].overlay);
-                    }
+                    addLayerToMap(productType, result.imageUrl, result.bounds);
                     
-                    const imageBounds = result.bounds || municipalityBounds;
-                    
-                    const overlay = L.imageOverlay(result.imageUrl, imageBounds, {
-                        opacity: 1.0,  // Opacity is already baked into the image
-                        interactive: true
-                    });
-                    
-                    overlay.addTo(map);
-                    
-                    // Store layer information
-                    layers[productType] = {
-                        overlay: overlay,
-                        opacity: opacity * 100,
-                        date: date,
-                        waterMask: result.water_mask_applied
-                    };
-                    
-                    // Reorder layers to maintain stacking order
-                    reorderLayers();
-                    
-                    let statusMessage = `✅ ${productType} loaded for ${date}`;
+                    let statusMessage = `${productType} loaded for ${date}`;
                     if (result.water_mask_applied) {
                         statusMessage += ' (water mask applied)';
                     }
                     updateStatus(statusMessage, 'success');
                 } else {
-                    updateStatus(`❌ ${result.error}`, 'error');
-                    // Uncheck the checkbox if loading failed
+                    updateStatus(`${result.error}`, 'error');
                     document.getElementById(`checkbox-${productType.toLowerCase()}`).checked = false;
                     document.getElementById(`layer-${productType.toLowerCase()}`).classList.remove('active');
                 }
             } catch (e) {
-                updateStatus(`❌ Error: ${e.message}`, 'error');
+                updateStatus(`Error: ${e.message}`, 'error');
                 console.error(e);
-                // Uncheck the checkbox if loading failed
                 document.getElementById(`checkbox-${productType.toLowerCase()}`).checked = false;
                 document.getElementById(`layer-${productType.toLowerCase()}`).classList.remove('active');
             } finally {
@@ -963,29 +756,98 @@
             }
         }
         
-        // Remove a specific layer
-        function removeLayer(productType) {
-            if (layers[productType]) {
-                map.removeLayer(layers[productType].overlay);
-                delete layers[productType];
-                updateStatus(`Layer ${productType} removed`);
+        // Detect illegal construction
+        async function detectIllegalConstruction() {
+            // Get the dates from the input fields
+            const date1 = document.getElementById('illegal-date1').value;
+            const date2 = document.getElementById('illegal-date2').value;
+            
+            updateStatus(`Analyzing illegal construction from ${date1} to ${date2}...`);
+            document.querySelector('.sidebar').classList.add('loading');
+            
+            try {
+                const response = await fetch('/api/illegal-construction', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        date1: date1,  // Pass the dates
+                        date2: date2
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLayerToMap('illegal-construction', result.imageUrl, result.bounds);
+                    updateStatus('Illegal construction analysis complete', 'success');
+                } else {
+                    updateStatus(`${result.error}`, 'error');
+                    document.getElementById('checkbox-illegal').checked = false;
+                    document.getElementById('layer-illegal').classList.remove('active');
+                }
+            } catch (e) {
+                updateStatus(`Error: ${e.message}`, 'error');
+                console.error(e);
+                document.getElementById('checkbox-illegal').checked = false;
+                document.getElementById('layer-illegal').classList.remove('active');
+            } finally {
+                document.querySelector('.sidebar').classList.remove('loading');
+            }
+        }
+        
+        // Add layer to map
+        function addLayerToMap(layerId, imageUrl, bounds) {
+            // Remove existing layer if present
+            if (layers[layerId]) {
+                map.removeLayer(layers[layerId]);
+            }
+            
+            const imageBounds = bounds || municipalityBounds;
+            
+            const overlay = L.imageOverlay(imageUrl, imageBounds, {
+                opacity: 1.0,
+                interactive: true
+            });
+            
+            overlay.addTo(map);
+            layers[layerId] = overlay;
+            
+            // Reorder layers
+            reorderLayers();
+            
+            updateActiveLayersList();
+        }
+        
+        // Remove layer
+        function removeLayer(layerId) {
+            if (layers[layerId]) {
+                map.removeLayer(layers[layerId]);
+                delete layers[layerId];
+                updateStatus(`Layer ${layerId} removed`);
             }
         }
         
         // Clear all layers
         function clearAllLayers() {
-            Object.keys(layers).forEach(productType => {
-                if (layers[productType]) {
-                    map.removeLayer(layers[productType].overlay);
+            Object.keys(layers).forEach(layerId => {
+                if (layers[layerId]) {
+                    map.removeLayer(layers[layerId]);
                 }
-                // Uncheck checkbox
-                const checkbox = document.getElementById(`checkbox-${productType.toLowerCase()}`);
-                if (checkbox) checkbox.checked = false;
-                // Remove active class
-                const layerItem = document.getElementById(`layer-${productType.toLowerCase()}`);
-                if (layerItem) layerItem.classList.remove('active');
             });
             layers = {};
+            
+            // Uncheck all checkboxes
+            document.querySelectorAll('.layer-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            // Remove active classes
+            document.querySelectorAll('.layer-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Hide NDCI legend
+            document.getElementById('ndci-legend').style.display = 'none';
             
             updateActiveLayersList();
             updateStatus('All layers cleared');
@@ -1001,30 +863,22 @@
             
             // If layer is active, reload it with new opacity
             if (layers[productType]) {
-                layers[productType].opacity = opacity;
-                // Reload the layer with new opacity
                 await loadLayer(productType);
             }
         }
         
-        // Reorder layers to maintain proper stacking
+        // Reorder layers
         function reorderLayers() {
-            // Order: RGB (bottom), NDWI, NDVI, NDCI (top)
-            const layerOrder = ['RGB', 'NDWI', 'NDVI', 'NDCI'];
+            const layerOrder = ['RGB', 'NDCI', 'illegal-construction'];
             
-            layerOrder.forEach(productType => {
-                if (layers[productType]) {
-                    layers[productType].overlay.bringToFront();
+            layerOrder.forEach(layerId => {
+                if (layers[layerId]) {
+                    layers[layerId].bringToFront();
                 }
             });
-            
-            // Always bring boundary to front
-            if (boundsRectangle) {
-                boundsRectangle.bringToFront();
-            }
         }
         
-        // Update active layers list display
+        // Update active layers list
         function updateActiveLayersList() {
             const activeLayersList = document.getElementById('active-layers-list');
             const activeLayersContent = document.getElementById('active-layers-content');
@@ -1034,136 +888,16 @@
             if (activeLayers.length > 0) {
                 activeLayersList.style.display = 'block';
                 
-                activeLayersContent.innerHTML = activeLayers.map(productType => {
-                    const config = layerConfigs[productType];
-                    const layerInfo = layers[productType];
+                activeLayersContent.innerHTML = activeLayers.map(layerId => {
+                    const config = layerConfigs[layerId] || { icon: '', description: layerId };
                     return `
                         <div class="active-layer-item">
-                            <span class="layer-type">${config.icon} ${productType}</span>
-                            <span class="layer-opacity">${layerInfo.opacity}%</span>
+                            ${config.icon} ${config.description}
                         </div>
                     `;
                 }).join('');
             } else {
                 activeLayersList.style.display = 'none';
-            }
-        }
-        
-        // Load available dates from API
-        async function loadAvailableDates() {
-            updateStatus('Loading available dates...');
-            
-            try {
-                const response = await fetch(`/api/available-dates`);
-                const result = await response.json();
-                
-                if (result.success) {
-                    availableDatesData = result;
-                    displayAvailableDates(result);
-                    updateStatus(`Found ${result.total} excellent quality dates in last 30 days`);
-                    
-                    // Check if current selected date is available
-                    const currentDate = document.getElementById('selected-date').value;
-                    checkDateAvailability(currentDate);
-                    
-                    // Update latest date info
-                    await loadLatestDateInfo();
-                } else {
-                    updateStatus('Failed to load available dates', 'error');
-                }
-            } catch (e) {
-                console.error('Error loading dates:', e);
-                updateStatus('Error loading available dates', 'error');
-            }
-        }
-        
-        // Display available dates as chips with cloud coverage
-        function displayAvailableDates(dateData) {
-            const container = document.getElementById('available-dates');
-            
-            if (!dateData.categorized || !dateData.categorized.excellent || dateData.categorized.excellent.length === 0) {
-                container.innerHTML = '<span style="color: #dc3545;">No excellent quality dates available in last 30 days</span>';
-                return;
-            }
-            
-            container.innerHTML = '';
-            
-            // Show only excellent dates, sorted newest first
-            const excellentDates = dateData.categorized.excellent.sort((a, b) => new Date(b.date) - new Date(a.date));
-            
-            excellentDates.forEach(dateInfo => {
-                const chip = document.createElement('div');
-                chip.className = 'date-chip excellent';
-                chip.textContent = dateInfo.date;
-                
-                // Add cloud coverage badge
-                const badge = document.createElement('span');
-                badge.className = 'cloud-badge';
-                badge.textContent = `${Math.round(dateInfo.cloud)}%`;
-                chip.appendChild(badge);
-                
-                // Set tooltip
-                chip.title = `${dateInfo.date} - ${dateInfo.cloud.toFixed(1)}% cloud coverage (excellent quality)`;
-                
-                // Click to select date
-                chip.onclick = () => {
-                    document.getElementById('selected-date').value = dateInfo.date;
-                    updateDateChips(dateInfo.date);
-                    checkDateAvailability(dateInfo.date);
-                    // Reload active layers with new date
-                    reloadActiveLayers();
-                };
-                
-                container.appendChild(chip);
-            });
-            
-            // Select current date if available
-            const currentDate = document.getElementById('selected-date').value;
-            updateDateChips(currentDate);
-        }
-        
-        // Reload all active layers with new date
-        async function reloadActiveLayers() {
-            const activeLayers = Object.keys(layers);
-            if (activeLayers.length > 0) {
-                updateStatus(`Reloading ${activeLayers.length} layer(s) with new date...`);
-                for (const productType of activeLayers) {
-                    await loadLayer(productType);
-                }
-            }
-        }
-        
-        // Update selected state of date chips
-        function updateDateChips(selectedDate) {
-            document.querySelectorAll('.date-chip').forEach(chip => {
-                if (chip.textContent.includes(selectedDate)) {
-                    chip.classList.add('selected');
-                } else {
-                    chip.classList.remove('selected');
-                }
-            });
-        }
-        
-        // Check if selected date has available data with cloud info
-        function checkDateAvailability(date) {
-            const input = document.getElementById('selected-date');
-            
-            if (!availableDatesData.dates_with_cloud) {
-                input.classList.remove('has-data', 'no-data');
-                return;
-            }
-            
-            // Find date in available data
-            const dateInfo = availableDatesData.dates_with_cloud.find(d => d.date === date);
-            
-            if (dateInfo) {
-                input.classList.remove('no-data');
-                input.classList.add('has-data');
-                updateStatus(`✅ Data available for ${date} (${dateInfo.cloud_cover.toFixed(1)}% cloud)`, 'success');
-            } else {
-                input.classList.remove('has-data');
-                input.classList.add('no-data');
-                updateStatus(`⚠️ No data for ${date} - select a highlighted date`, 'error');
             }
         }
         
@@ -1183,7 +917,7 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    updateStatus(`✅ ${result.message}`, 'success');
+                    updateStatus(`${result.message}`, 'success');
                 } else {
                     updateStatus('Failed to clear cache', 'error');
                 }
@@ -1207,13 +941,30 @@
         
         // Set up event listeners
         function setupEventListeners() {
-            // Date input change
-            document.getElementById('selected-date').addEventListener('change', function(e) {
-                const selectedDate = e.target.value;
-                updateDateChips(selectedDate);
-                checkDateAvailability(selectedDate);
-                // Automatically reload active layers with new date
-                reloadActiveLayers();
+            // Date input change - automatically reload active optical layers
+            document.getElementById('selected-date').addEventListener('change', async function(e) {
+                const newDate = e.target.value;
+                updateStatus(`Date changed to ${newDate}, reloading active layers...`);
+                await reloadOpticalLayers();
+            });
+            
+            // Illegal construction date changes - automatically reload if layer is active
+            document.getElementById('illegal-date1').addEventListener('change', async function(e) {
+                if (layers['illegal-construction'] && document.getElementById('checkbox-illegal').checked) {
+                    const date1 = e.target.value;
+                    const date2 = document.getElementById('illegal-date2').value;
+                    updateStatus(`Reference date changed to ${date1}, reloading illegal construction analysis...`);
+                    await reloadIllegalConstructionLayer();
+                }
+            });
+            
+            document.getElementById('illegal-date2').addEventListener('change', async function(e) {
+                if (layers['illegal-construction'] && document.getElementById('checkbox-illegal').checked) {
+                    const date1 = document.getElementById('illegal-date1').value;
+                    const date2 = e.target.value;
+                    updateStatus(`Comparison date changed to ${date2}, reloading illegal construction analysis...`);
+                    await reloadIllegalConstructionLayer();
+                }
             });
             
             // Map click for coordinates
@@ -1226,42 +977,55 @@
                     .setContent(coords)
                     .openOn(map);
             });
+        }
+        
+        // Reload optical layers with current date
+        async function reloadOpticalLayers() {
+            // Get currently active optical layers
+            const activeOpticalLayers = [];
             
-            // Keyboard shortcuts
-            document.addEventListener('keydown', function(e) {
-                if (e.ctrlKey || e.metaKey) return;
+            if (layers['RGB'] && document.getElementById('checkbox-rgb').checked) {
+                activeOpticalLayers.push('RGB');
+            }
+            if (layers['NDCI'] && document.getElementById('checkbox-ndci').checked) {
+                activeOpticalLayers.push('NDCI');
+            }
+            
+            if (activeOpticalLayers.length > 0) {
+                updateStatus(`Reloading ${activeOpticalLayers.length} layer(s) with new date...`);
                 
-                switch(e.key.toLowerCase()) {
-                    case 'r':
-                        document.getElementById('checkbox-rgb').click();
-                        break;
-                    case 'n':
-                        document.getElementById('checkbox-ndvi').click();
-                        break;
-                    case 'c':
-                        if (e.shiftKey) {
-                            clearAllLayers();
-                        } else {
-                            document.getElementById('checkbox-ndci').click();
-                        }
-                        break;
-                    case 'w':
-                        document.getElementById('checkbox-ndwi').click();
-                        break;
-                    case 'i':
-                        document.getElementById('checkbox-ndci').click();
-                        break;
+                // Reload each active layer
+                for (const productType of activeOpticalLayers) {
+                    try {
+                        await loadLayer(productType);
+                    } catch (error) {
+                        console.error(`Error reloading ${productType}:`, error);
+                        updateStatus(`Error reloading ${productType}: ${error.message}`, 'error');
+                    }
                 }
-            });
+                
+                updateStatus(`Successfully reloaded ${activeOpticalLayers.length} layer(s)`, 'success');
+            }
+        }
+        
+        // Reload illegal construction layer with current date range
+        async function reloadIllegalConstructionLayer() {
+            try {
+                await detectIllegalConstruction();
+                updateStatus('Illegal construction analysis reloaded successfully', 'success');
+            } catch (error) {
+                console.error('Error reloading illegal construction layer:', error);
+                updateStatus(`Error reloading illegal construction: ${error.message}`, 'error');
+            }
         }
         
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', initApp);
         
         // Log startup
-        console.log('🚀 Alkmaar Municipality Satellite Viewer');
-        console.log('Simplified date selection - user picks any date');
-        console.log('Keyboard shortcuts: R=RGB, N=NDVI, I/C=NDCI, W=NDWI, Shift+C=Clear All');
+        console.log('Alkmaar Municipality Satellite & Radar Analysis');
+        console.log('Features: RGB imagery, NDCI water analysis, Illegal construction detection');
+        console.log('All date ranges are now customizable');
     </script>
 </body>
 </html>

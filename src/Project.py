@@ -18,7 +18,7 @@ import os
 import json
 from tools import *
 from illegal import *
-from radar_copernicus import fetch_sentinel1_product, get_token
+from radar_copernicus_test import fetch_sentinel1_product, get_token
 
 # %%
 # Fetch the geojson file for the region of interest
@@ -74,7 +74,7 @@ if not bgt_data_between_2019_2022.empty:
         
         # Calculate change using same logic as cell 32
         change_map = comp_data - ref_data
-        positive_changes_mask = change_map > 0.05  # Same threshold as cell 32
+        positive_changes_mask = change_map > 0.8  # Same threshold as cell 32
         
         print(f"✅ Radar data shapes - Ref: {ref_data.shape}, Comp: {comp_data.shape}")
         print(f"✅ Positive changes: {np.sum(positive_changes_mask)} pixels")
@@ -209,3 +209,4 @@ if not bgt_data_between_2019_2022.empty:
 
 else:
     print("⚠️ No BGT data to plot")
+# %%
