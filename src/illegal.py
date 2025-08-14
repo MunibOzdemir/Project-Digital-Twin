@@ -443,6 +443,7 @@ def download_bgt_for_alkmaar(geojson_path, output_folder):
     
     return bgt_gdf
 
+# change here for different bgt years
 def filter_bgt_data(bgt_data, path_geojson):
 
     bgt_data_between_2019_2022 = bgt_data[(bgt_data["creationDate"] < "2022-05-01") & (bgt_data["creationDate"] > "2019-03-01")]
