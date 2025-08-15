@@ -1,6 +1,7 @@
 from pathlib import Path
 import geopandas as gpd
 import os
+from datetime import datetime
 
 
 
@@ -40,32 +41,94 @@ def get_geojson_path(filename):
     print(f"GeoJSON file path: {data_file_path}")
     return str(data_file_path)
 
-def get_tif_path(filename=None, ndvi=True):
+def get_tif_path(filename=None, ndvi=True, most_recent=True, year=None, season=None, show_files=False):
     """
-    Get the path to a .tif file in the 'data' directory.
-    - If filename is provided, return that specific file path.
-    - If ndvi is True, return the NDVI tif file path.
-    - If exclude_ndvi is True, return a .tif file without 'ndvi' in its name.
+    Advanced version with additional filtering options.
+    
+    Parameters:
+    - filename: If provided, return that specific file path
+    - ndvi: If True, look for files with 'ndvi' in name; if False, exclude 'ndvi' files
+    - most_recent: If True, return the most recently modified file; if False, return first found
+    - year: Filter by year in filename (e.g., 2019, 2022)
+    - season: Filter by season in filename (e.g., 'spring', 'summer', 'autumn', 'winter')
+    - show_options: If True, print all available files before selecting
+    
+    Returns:
+    - str: Path to the .tif file
     """
     current_dir = Path(__file__).resolve().parent
     data_dir = current_dir.parent / 'data'
-
+    
     # If a specific filename is provided, return its path
     if filename:
-        return str(data_dir / filename)
+        file_path = data_dir / filename
+        if file_path.exists():
+            return str(file_path)
+        else:
+            raise FileNotFoundError(f"Specified file '{filename}' not found in data directory.")
+    
+    # Find all .tif files
+    all_tif_files = [f for f in data_dir.iterdir() if f.suffix.lower() == '.tif']
 
-    # If 'exclude_ndvi' is True, return a .tif file without 'ndvi' in its name
-    if not ndvi:
-        for file in data_dir.iterdir():
-            if file.suffix.lower() == '.tif' and 'ndvi' not in file.name.lower():
-                return str(file)
-        raise FileNotFoundError("No .tif file without 'ndvi' in the name was found.")
+    if show_files:
+        print(f"All .tif files in data directory:")
+        for i, file in enumerate(all_tif_files, 1):
+            mod_time = datetime.fromtimestamp(file.stat().st_mtime)
+            size = file.stat().st_size
+            print(f"  {i}. {file.name} (modified: {mod_time.strftime('%Y-%m-%d %H:%M:%S')}, size: {size:,} bytes)")
+        print()
     
-    # If ndvi=True, return a .tif file that contains 'ndvi' in its name
-    for file in data_dir.iterdir():
-        if file.suffix.lower() == '.tif' and 'ndvi' in file.name.lower():
-            return str(file)
+    # Apply filters
+    filtered_files = []
     
-    # If no 'ndvi' .tif file is found, raise an error
-    raise FileNotFoundError("No .tif file with 'ndvi' in the name was found.")
+    for file in all_tif_files:
+        filename_lower = file.name.lower()
+        
+        # NDVI filter
+        if ndvi and 'ndvi' not in filename_lower:
+            continue
+        if not ndvi and 'ndvi' in filename_lower:
+            continue
+        
+        # Year filter
+        if year and str(year) not in file.name:
+            continue
+        
+        # Season filter
+        if season and season.lower() not in filename_lower:
+            continue
+        
+        filtered_files.append(file)
+    
+    # Check if any files were found
+    if not filtered_files:
+        filters = []
+        if ndvi:
+            filters.append("with 'ndvi'")
+        else:
+            filters.append("without 'ndvi'")
+        if year:
+            filters.append(f"from year {year}")
+        if season:
+            filters.append(f"from {season} season")
+        
+        filter_desc = " and ".join(filters) if filters else "matching criteria"
+        raise FileNotFoundError(f"No .tif file {filter_desc} was found.")
+    
+    # Return based on most_recent parameter
+    if most_recent:
+        # Sort by modification time (most recent first)
+        filtered_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        selected_file = filtered_files[0]
+        print(f"Selected most recent .tif file: {selected_file.name}")
+    else:
+        # Return first found file (or you could sort alphabetically)
+        filtered_files.sort(key=lambda x: x.name)  # Alphabetical sort
+        selected_file = filtered_files[0]
+        print(f"Selected first .tif file (alphabetically): {selected_file.name}")
+    
+    mod_time = datetime.fromtimestamp(selected_file.stat().st_mtime)
+    print(f"File details: modified {mod_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    return str(selected_file)
 
