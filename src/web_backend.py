@@ -5,6 +5,8 @@ import hashlib
 import pickle
 import base64
 import io
+import time
+import zipfile
 from pathlib import Path
 from datetime import datetime, timedelta
 from PIL import Image
@@ -219,6 +221,318 @@ def create_water_mask(image_shape, bounds, water_gdf):
     return water_mask.astype(bool)
 
 # ================================
+# BGT DATA DOWNLOADING
+# ================================
+
+def convert_geojson_to_rd_polygon(geojson_path):
+    """Convert GeoJSON file directly to RD polygon WKT for BGT API"""
+    print(f"Loading GeoJSON and converting to RD...")
+    
+    try:
+        # Load the GeoJSON file
+        alkmaar_gdf = gpd.read_file(geojson_path)
+        print(f"Loaded GeoJSON: {len(alkmaar_gdf)} features")
+        print(f"   Original CRS: {alkmaar_gdf.crs}")
+        
+        # Convert to RD (EPSG:28992) which is what BGT API expects
+        if alkmaar_gdf.crs and alkmaar_gdf.crs.to_epsg() != 28992:
+            alkmaar_rd = alkmaar_gdf.to_crs('EPSG:28992')
+            print(f"   Converted to RD (EPSG:28992)")
+        else:
+            alkmaar_rd = alkmaar_gdf.copy()
+        
+        # Get the geometry (assuming it's the first feature for municipality boundary)
+        geometry_rd = alkmaar_rd.geometry.iloc[0]
+        
+        # Convert to WKT format that BGT API expects
+        polygon_wkt = geometry_rd.wkt
+        
+        print(f"Created RD polygon WKT")
+        print(f"   WKT length: {len(polygon_wkt)} characters")
+        
+        return polygon_wkt
+            
+    except Exception as e:
+        print(f"Error converting GeoJSON: {str(e)}")
+        return None
+
+def create_bgt_download_request(polygon_wkt):
+    """Create BGT download request using KNOWN working parameters"""
+    base_url = 'https://api.pdok.nl/lv/bgt/download/v1_0/full/custom'
+    
+    # Use EXACT feature types from working API documentation
+    featuretypes = [
+        "bak",
+        "gebouwinstallatie", 
+        "kunstwerkdeel",
+        "onbegroeidterreindeel"
+    ]
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+
+    payload = {
+        "featuretypes": featuretypes,
+        "format": "citygml",
+        "geofilter": polygon_wkt
+    }
+    
+    print(f"Creating BGT download request...")
+    print(f"Requesting features: {featuretypes}")
+    print(f"Using format: citygml")
+    
+    try:
+        response = requests.post(base_url, headers=headers, data=json.dumps(payload), timeout=60)
+        
+        if response.status_code == 202:
+            response_data = response.json()
+            download_request_id = response_data.get('downloadRequestId')
+            print(f"Download Request ID: {download_request_id}")
+            return download_request_id
+        else:
+            print(f"Request failed: {response.status_code}")
+            print(f"Response: {response.text}")
+            return None
+            
+    except Exception as e:
+        print(f"Error creating download request: {str(e)}")
+        return None
+
+def check_bgt_download_status(download_request_id, max_wait_minutes=20):
+    """Check BGT download status until complete"""
+    base_url = 'https://api.pdok.nl/lv/bgt/download/v1_0/full/custom'
+    status_url = f'{base_url}/{download_request_id}/status'
+    
+    max_checks = max_wait_minutes * 2  # Check every 30 seconds
+    
+    print(f"Checking download status (max {max_wait_minutes} minutes)...")
+    
+    for check in range(max_checks):
+        try:
+            response = requests.get(status_url, timeout=30)
+            
+            # FIXED: Accept both 200 and 201 status codes
+            if response.status_code in [200, 201]:
+                status_data = response.json()
+                status = status_data.get('status', 'unknown')
+                
+                if status == 'COMPLETED':
+                    download_link = status_data.get('_links', {}).get('download', {}).get('href')
+                    if download_link:
+                        print(f"Download ready!")
+                        return download_link
+                    else:
+                        print(f"Download completed but no download link found")
+                        return None
+                        
+                elif status == 'FAILED':
+                    print(f"Download failed: {status_data}")
+                    return None
+                    
+                else:
+                    # Still processing
+                    elapsed = (check + 1) * 30
+                    print(f"   Status: {status} (HTTP {response.status_code}) (elapsed: {elapsed//60}m {elapsed%60}s)")
+                    time.sleep(30)
+                    
+            else:
+                print(f"Status check failed: {response.status_code}")
+                time.sleep(30)
+                
+        except Exception as e:
+            print(f"Status check error: {str(e)}")
+            time.sleep(30)
+    
+    print(f"Download timed out after {max_wait_minutes} minutes")
+    return None
+
+def download_bgt_file(download_link, output_folder):
+    """Download BGT ZIP file"""
+    download_url = f'https://api.pdok.nl{download_link}'
+    zip_filename = f'bgt_alkmaar_{int(time.time())}.zip'
+    zip_path = os.path.join(output_folder, zip_filename)
+    
+    print(f"Downloading BGT file...")
+    
+    try:
+        os.makedirs(output_folder, exist_ok=True)
+        
+        response = requests.get(download_url, stream=True, timeout=300)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        
+        with open(zip_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        percent = (downloaded / total_size) * 100
+                        print(f"\r   Progress: {percent:.1f}%", end='')
+        
+        print(f"\nDownload complete: {zip_path}")
+        return zip_path
+        
+    except Exception as e:
+        print(f"Download failed: {str(e)}")
+        return None
+
+def extract_and_process_bgt_data(zip_path, output_folder):
+    """Extract and process BGT data from ZIP file"""
+    print(f"Extracting BGT data...")
+    
+    extract_folder = os.path.join(output_folder, 'bgt_extracted')
+    os.makedirs(extract_folder, exist_ok=True)
+    
+    try:
+        # Extract ZIP file
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(extract_folder)
+            
+        print(f"Extracted to: {extract_folder}")
+        
+        # Find GML files
+        bgt_files = []
+        for root, dirs, files in os.walk(extract_folder):
+            for file in files:
+                if file.endswith(('.gml', '.xml')):
+                    bgt_files.append(os.path.join(root, file))
+                    
+        print(f"Found {len(bgt_files)} BGT data files")
+        
+        if not bgt_files:
+            print("No GML files found")
+            return gpd.GeoDataFrame()
+        
+        # Load and combine all BGT data
+        all_gdfs = []
+        
+        for file_path in bgt_files:
+            try:
+                print(f"   Loading: {os.path.basename(file_path)}")
+                
+                # Try to load with different drivers
+                gdf = None
+                for driver in ['GML', 'GMLAS']:
+                    try:
+                        gdf = gpd.read_file(file_path, driver=driver)
+                        if not gdf.empty:
+                            print(f"     Loaded {len(gdf)} features with {driver}")
+                            break
+                    except Exception:
+                        continue
+                
+                if gdf is not None and not gdf.empty:
+                    gdf['source_file'] = os.path.basename(file_path)
+                    all_gdfs.append(gdf)
+                    
+            except Exception as e:
+                print(f"     Error loading {file_path}: {str(e)}")
+        
+        if all_gdfs:
+            # Combine all data
+            combined_gdf = gpd.pd.concat(all_gdfs, ignore_index=True)
+            
+            # Convert to WGS84 if needed
+            if combined_gdf.crs and combined_gdf.crs.to_epsg() != 4326:
+                print(f"Converting to WGS84...")
+                combined_gdf = combined_gdf.to_crs('EPSG:4326')
+            
+            print(f"Combined BGT data: {len(combined_gdf)} features")
+            return combined_gdf
+        else:
+            print("No valid BGT data could be loaded")
+            return gpd.GeoDataFrame()
+            
+    except Exception as e:
+        print(f"Error processing BGT data: {str(e)}")
+        return gpd.GeoDataFrame()
+
+def download_bgt_for_alkmaar(geojson_path, output_folder):
+    """Complete BGT download workflow for Alkmaar using GeoJSON directly"""
+    print("Starting BGT data download for Alkmaar...")
+    
+    # Step 1: Convert GeoJSON to RD polygon WKT
+    try:
+        polygon_wkt = convert_geojson_to_rd_polygon(geojson_path)
+        if not polygon_wkt:
+            print("Failed to convert GeoJSON to polygon")
+            return gpd.GeoDataFrame()
+    except Exception as e:
+        print(f"GeoJSON conversion failed: {str(e)}")
+        return gpd.GeoDataFrame()
+    
+    # Step 2: Create download request
+    download_request_id = create_bgt_download_request(polygon_wkt)
+    if not download_request_id:
+        print("Failed to create download request")
+        return gpd.GeoDataFrame()
+    
+    # Step 3: Wait for completion
+    download_link = check_bgt_download_status(download_request_id, max_wait_minutes=20)
+    if not download_link:
+        print("Download preparation failed")
+        return gpd.GeoDataFrame()
+    
+    # Step 4: Download file
+    zip_path = download_bgt_file(download_link, output_folder)
+    if not zip_path:
+        print("File download failed")
+        return gpd.GeoDataFrame()
+    
+    # Step 5: Extract and process
+    bgt_gdf = extract_and_process_bgt_data(zip_path, output_folder)
+    
+    # Step 6: Save and cleanup
+    if not bgt_gdf.empty:
+        output_path = os.path.join(output_folder, 'bgt_alkmaar_processed.geojson')
+        bgt_gdf.to_file(output_path, driver='GeoJSON')
+        print(f"Saved processed BGT data to: {output_path}")
+        
+        # Clean up ZIP file
+        try:
+            os.remove(zip_path)
+            print(f"Cleaned up ZIP file")
+        except:
+            pass
+    
+    return bgt_gdf
+
+def ensure_bgt_data_available():
+    """Ensure BGT data is available, download if necessary"""
+    bgt_processed_path = DATA_DIR / 'bgt_alkmaar_processed.geojson'
+    alkmaar_geojson_path = DATA_DIR / 'alkmaar.geojson'
+    
+    # Check if processed BGT data already exists
+    if bgt_processed_path.exists():
+        print(f"BGT data already available at: {bgt_processed_path}")
+        return True
+    
+    # Check if we have the municipality boundary to work with
+    if not alkmaar_geojson_path.exists():
+        print(f"Municipality boundary file not found at: {alkmaar_geojson_path}")
+        print("Cannot download BGT data without municipality boundaries")
+        return False
+    
+    # Download BGT data
+    print("BGT data not found, attempting to download...")
+    try:
+        bgt_gdf = download_bgt_for_alkmaar(str(alkmaar_geojson_path), str(DATA_DIR))
+        if not bgt_gdf.empty:
+            print("BGT data downloaded successfully")
+            return True
+        else:
+            print("BGT download returned empty dataset")
+            return False
+    except Exception as e:
+        print(f"BGT download failed: {e}")
+        return False
+
+# ================================
 # BGT DATA LOADING
 # ================================
 
@@ -252,7 +566,14 @@ def load_bgt_data():
 
 # Load water bodies and BGT data once at startup
 WATER_BODIES = load_surface_water_mask()
-BGT_DATA = load_bgt_data()
+
+# Ensure BGT data is available before loading
+print("Checking BGT data availability...")
+if ensure_bgt_data_available():
+    BGT_DATA = load_bgt_data()
+else:
+    print("Continuing without BGT data - illegal construction detection will use radar only")
+    BGT_DATA = None
 
 # Get municipality bounds and geometry
 ALKMAAR_BOUNDS, ALKMAAR_GEOMETRY = get_bounds_and_geometry_from_geojson()
@@ -1094,7 +1415,45 @@ def get_illegal_construction():
         print(f"Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/clear-cache', methods=['POST'])
+@app.route('/api/download-bgt', methods=['POST'])
+def download_bgt_data():
+    """Download BGT data for Alkmaar"""
+    try:
+        print("Manual BGT download requested...")
+        
+        alkmaar_geojson_path = DATA_DIR / 'alkmaar.geojson'
+        
+        if not alkmaar_geojson_path.exists():
+            return jsonify({
+                'success': False,
+                'error': 'Municipality boundary file (alkmaar.geojson) not found'
+            }), 400
+        
+        # Download BGT data
+        bgt_gdf = download_bgt_for_alkmaar(str(alkmaar_geojson_path), str(DATA_DIR))
+        
+        if not bgt_gdf.empty:
+            # Reload BGT data globally
+            global BGT_DATA
+            BGT_DATA = load_bgt_data()
+            
+            return jsonify({
+                'success': True,
+                'message': f'BGT data downloaded successfully. {len(bgt_gdf)} features processed.',
+                'bgt_features': len(bgt_gdf)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'BGT download returned empty dataset'
+            }), 500
+            
+    except Exception as e:
+        print(f"Error downloading BGT data: {e}")
+        return jsonify({
+            'success': False, 
+            'error': f'BGT download failed: {str(e)}'
+        }), 500
 def clear_cache():
     """Clear cache for specific product or all"""
     try:
@@ -1185,6 +1544,7 @@ def main(port=5000, debug=True):
     print(f"\nAPI Endpoints:")
     print(f"   POST /api/satellite-data      - Optical imagery (RGB, NDCI)")
     print(f"   POST /api/illegal-construction - Illegal construction analysis")
+    print(f"   POST /api/download-bgt        - Download BGT data")
     print(f"   POST /api/clear-cache        - Clear cache")
     print(f"   GET  /api/info              - System information")
     

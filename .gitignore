@@ -223,3 +223,6 @@ web/*
 
 # cache files
 *.pkl
+
+# BGT geojson file
+bgt_alkmaar_processed.geojson

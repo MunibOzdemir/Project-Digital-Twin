@@ -331,10 +331,10 @@
             z-index: 1000;
         }
         
-        /* Active layers list */
-        .active-layers-list {
+        /* Layer description panel */
+        .layer-description-panel {
             position: absolute;
-            top: 20px;
+            bottom: 20px;
             right: 20px;
             background: white;
             padding: 12px;
@@ -342,18 +342,54 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             font-size: 12px;
             z-index: 1000;
-            max-width: 200px;
+            max-width: 300px;
+            min-width: 250px;
+            display: none;
         }
         
-        .active-layers-list h4 {
-            margin: 0 0 8px 0;
-            font-size: 13px;
+        .layer-description-panel.show {
+            display: block;
+        }
+        
+        .layer-selector {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            font-size: 12px;
+            background: white;
+            margin-bottom: 10px;
+        }
+        
+        .layer-selector:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+        
+        .layer-description {
+            line-height: 1.4;
             color: #495057;
         }
         
-        .active-layer-item {
-            padding: 4px 0;
-            color: #6c757d;
+        .layer-description h4 {
+            margin: 0 0 6px 0;
+            font-size: 13px;
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .layer-description p {
+            margin: 0 0 8px 0;
+        }
+        
+        .layer-description ul {
+            margin: 0;
+            padding-left: 16px;
+        }
+        
+        .layer-description li {
+            margin-bottom: 2px;
         }
         
         /* Legend */
@@ -443,7 +479,7 @@
                     <h3>Date Selection</h3>
                     
                     <div class="date-selector">
-                        <input type="date" id="selected-date" class="date-input" value="2024-06-01">
+                        <input type="date" id="selected-date" class="date-input" value="2024-08-12">
                     </div>
                     
                     <button class="btn btn-secondary" onclick="clearCache()" style="width: 100%; margin-top: 10px;">
@@ -567,11 +603,24 @@
                 <span id="map-info-text">Click on map for coordinates</span>
             </div>
             
-            <!-- Active Layers List -->
-            <div class="active-layers-list" id="active-layers-list" style="display: none;">
-                <h4>Active Layers</h4>
+            <!-- Active Layers List - moved to top right -->
+            <div class="active-layers-list" id="active-layers-list" style="display: none; position: absolute; top: 20px; right: 20px; background: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); font-size: 12px; z-index: 1000; max-width: 200px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 13px; color: #495057;">Active Layers</h4>
                 <div id="active-layers-content">
                     <!-- Dynamically populated -->
+                </div>
+            </div>
+            
+            <!-- Layer Description Panel - bottom right (always visible) -->
+            <div class="layer-description-panel show" id="layer-description-panel">
+                <select class="layer-selector" id="layer-selector" onchange="updateLayerDescription()">
+                    <option value="">Select layer for description...</option>
+                    <option value="RGB">RGB (True Color)</option>
+                    <option value="NDCI">NDCI (Water Quality)</option>
+                    <option value="illegal-construction">Illegal Construction Detection</option>
+                </select>
+                <div class="layer-description" id="layer-description-content">
+                    Select a layer above to see its description and interpretation guide.
                 </div>
             </div>
         </div>
@@ -590,6 +639,73 @@
             'NDCI': { icon: '', description: 'Chlorophyll' },
             'illegal-construction': { icon: '', description: 'Illegal Construction' }
         };
+        
+        // Layer descriptions
+        const layerDescriptions = {
+            'RGB': {
+                title: 'RGB True Color Imagery',
+                description: `
+                    <p><strong>What it shows:</strong> Natural color satellite imagery that shows the Earth as it would appear to the human eye.</p>
+                    <p><strong>How to interpret:</strong></p>
+                    <ul>
+                        <li><strong>Green areas:</strong> Vegetation, parks, forests</li>
+                        <li><strong>Brown/tan areas:</strong> Bare soil, agricultural fields</li>
+                        <li><strong>Blue areas:</strong> Water bodies (lakes, rivers, canals)</li>
+                        <li><strong>Gray/white areas:</strong> Urban development, buildings, roads</li>
+                        <li><strong>Dark areas:</strong> Shadows or deep water</li>
+                    </ul>
+                    <p><strong>Best for:</strong> General overview, urban planning, change detection, visual inspection.</p>
+                `
+            },
+            'NDCI': {
+                title: 'NDCI - Water Quality Index',
+                description: `
+                    <p><strong>What it shows:</strong> Normalized Difference Chlorophyll Index in water bodies, indicating algae and phytoplankton concentration.</p>
+                    <p><strong>How to interpret the colors:</strong></p>
+                    <ul>
+                        <li><strong>Blue colors:</strong> Clean water with low chlorophyll (-1.0 to -0.2)</li>
+                        <li><strong>Green colors:</strong> Moderate chlorophyll levels (-0.2 to 0.2)</li>
+                        <li><strong>Yellow/Orange:</strong> Higher chlorophyll, potential algae (0.2 to 0.6)</li>
+                        <li><strong>Red colors:</strong> Very high chlorophyll, algae blooms (0.6 to 1.0)</li>
+                    </ul>
+                    <p><strong>Best for:</strong> Water quality monitoring, detecting algae blooms, environmental assessment.</p>
+                    <p><strong>Note:</strong> Only shows data over water bodies (land areas are masked out).</p>
+                `
+            },
+            'illegal-construction': {
+                title: 'Illegal Construction Detection',
+                description: `
+                    <p><strong>What it shows:</strong> Comparison of radar data between two time periods to detect potential unauthorized construction.</p>
+                    <p><strong>How to interpret the colors:</strong></p>
+                    <ul>
+                        <li><strong>Red areas:</strong> Radar-detected changes (potential new construction)</li>
+                        <li><strong>Green areas:</strong> Legal construction permits from BGT database</li>
+                        <li><strong>Red without green:</strong> Possible unauthorized construction</li>
+                        <li><strong>Green areas:</strong> Known legal developments</li>
+                    </ul>
+                    <p><strong>How it works:</strong> Uses Sentinel-1 radar to detect structural changes, then cross-references with official BGT construction permits.</p>
+                    <p><strong>Best for:</strong> Urban planning enforcement, construction monitoring, compliance checking.</p>
+                    <p><strong>Limitations:</strong> May detect natural changes or miss some construction types.</p>
+                `
+            }
+        };
+        
+        // Update layer description based on dropdown selection
+        function updateLayerDescription() {
+            const selector = document.getElementById('layer-selector');
+            const content = document.getElementById('layer-description-content');
+            const selectedLayer = selector.value;
+            
+            if (selectedLayer && layerDescriptions[selectedLayer]) {
+                const desc = layerDescriptions[selectedLayer];
+                content.innerHTML = `
+                    <h4>${desc.title}</h4>
+                    ${desc.description}
+                `;
+            } else {
+                content.innerHTML = 'Select a layer above to see its description and interpretation guide.';
+            }
+        }
         
         // Initialize application
         async function initApp() {
@@ -878,7 +994,7 @@
             });
         }
         
-        // Update active layers list
+        // Update active layers list (description panel is now always visible)
         function updateActiveLayersList() {
             const activeLayersList = document.getElementById('active-layers-list');
             const activeLayersContent = document.getElementById('active-layers-content');
@@ -886,6 +1002,7 @@
             const activeLayers = Object.keys(layers);
             
             if (activeLayers.length > 0) {
+                // Show active layers list
                 activeLayersList.style.display = 'block';
                 
                 activeLayersContent.innerHTML = activeLayers.map(layerId => {
@@ -896,9 +1013,13 @@
                         </div>
                     `;
                 }).join('');
+                
             } else {
+                // Hide active layers list when no layers are active
                 activeLayersList.style.display = 'none';
             }
+            
+            // Description panel remains always visible with all options
         }
         
         // Clear cache
