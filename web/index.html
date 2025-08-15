@@ -277,27 +277,6 @@
             color: #155724;
         }
         
-        /* Info box */
-        .info-box {
-            background: white;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #dee2e6;
-            font-size: 12px;
-            color: #6c757d;
-        }
-        
-        .info-box strong {
-            color: #495057;
-        }
-        
-        .bounds-info {
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            margin-top: 8px;
-            line-height: 1.4;
-        }
-        
         /* Loading state */
         .loading {
             opacity: 0.6;
@@ -477,14 +456,9 @@
                 <!-- Date Selection for Optical -->
                 <div class="control-section">
                     <h3>Date Selection</h3>
-                    
                     <div class="date-selector">
-                        <input type="date" id="selected-date" class="date-input" value="2024-08-12">
+                        <input type="date" id="selected-date" class="date-input" value="2024-06-01">
                     </div>
-                    
-                    <button class="btn btn-secondary" onclick="clearCache()" style="width: 100%; margin-top: 10px;">
-                        Clear Image Cache
-                    </button>
                 </div>
                 
                 <!-- Optical Layers -->
@@ -536,6 +510,81 @@
                     </button>
                 </div>
                 
+                <!-- RGB Change Detection -->
+                <div class="control-section">
+                    <h3>RGB Change Detection</h3>
+                    <p style="font-size: 12px; color: #6c757d; margin-bottom: 15px;">
+                        Detects urban expansion and vegetation changes between two time periods
+                    </p>
+                    
+                    <!-- Add customizable dates for change detection -->
+                    <div class="date-range">
+                        <div class="date-group">
+                            <label>Reference Date</label>
+                            <input type="date" id="change-date1" class="date-input" value="2023-06-01">
+                        </div>
+                        <div class="date-group">
+                            <label>Comparison Date</label>
+                            <input type="date" id="change-date2" class="date-input" value="2024-06-01">
+                        </div>
+                    </div>
+                    
+                    <!-- Change Detection Threshold Slider -->
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-size: 12px; color: #6c757d; margin-bottom: 4px;">
+                            Change Sensitivity Threshold
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 11px; color: #6c757d; min-width: 35px;">More</span>
+                            <input type="range" class="opacity-slider" id="change-threshold" 
+                                   min="10" max="100" value="50" onchange="updateChangeThreshold()" 
+                                   style="flex: 1;">
+                            <span style="font-size: 11px; color: #6c757d; min-width: 35px;">Less</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 4px;">
+                            <span style="font-size: 11px; color: #495057; font-weight: 500;" id="threshold-value">50</span>
+                            <span style="font-size: 10px; color: #6c757d;"> (lower = more sensitive)</span>
+                        </div>
+                    </div>
+                    
+                    <!-- BGT Overlay Toggle -->
+                    <div class="layer-item" style="background: #f8f9fa; margin-bottom: 10px;">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-bgt-overlay" onchange="toggleBGTOverlay()">
+                        <div class="layer-info">
+                            <div class="layer-name">Include BGT Permits</div>
+                            <div class="layer-description">Overlay legal construction permits</div>
+                        </div>
+                    </div>
+                    
+                    <!-- RGB Change Detection Checkbox -->
+                    <div class="layer-item" id="layer-change">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-change" onchange="toggleChangeLayer()">
+                        <div class="layer-info">
+                            <div class="layer-name">Show Change Detection</div>
+                            <div class="layer-description">RGB comparison analysis</div>
+                        </div>
+                    </div>
+                    
+                    <div class="legend">
+                        <h4>Legend</h4>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(255, 0, 0, 0.8);"></div>
+                            <span>Changes detected (no BGT permit)</span>
+                        </div>
+                        <div class="legend-item" id="bgt-legend-yellow" style="display: none;">
+                            <div class="legend-color" style="background: rgba(255, 255, 0, 0.8);"></div>
+                            <span>Changes with BGT permit (legal)</span>
+                        </div>
+                        <div class="legend-item" id="bgt-legend-green" style="display: none;">
+                            <div class="legend-color" style="background: rgba(0, 180, 0, 0.4);"></div>
+                            <span>BGT permits (no changes detected)</span>
+                        </div>
+                        <div style="font-size: 10px; color: #6c757d; margin-top: 5px;">
+                            Intensity indicates magnitude of change
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Illegal Construction Detection -->
                 <div class="control-section">
                     <h3>Illegal Construction Detection</h3>
@@ -568,22 +617,15 @@
                         <h4>Legend</h4>
                         <div class="legend-item">
                             <div class="legend-color" style="background: rgba(255, 0, 0, 0.8);"></div>
-                            <span>Radar-detected changes</span>
+                            <span>Potential unauthorized construction</span>
                         </div>
                         <div class="legend-item">
                             <div class="legend-color" style="background: rgba(0, 255, 0, 0.8);"></div>
-                            <span>BGT documented (legal)</span>
+                            <span>Legal permits (no construction detected)</span>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- Info Box -->
-                <div class="control-section">
-                    <h3>Coverage Area</h3>
-                    <div class="info-box">
-                        <strong>Municipality Bounds:</strong>
-                        <div class="bounds-info" id="bounds-info">
-                            Loading bounds information...
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: rgba(0, 100, 255, 0.8);"></div>
+                            <span>Confirmed legal construction</span>
                         </div>
                     </div>
                 </div>
@@ -617,6 +659,7 @@
                     <option value="">Select layer for description...</option>
                     <option value="RGB">RGB (True Color)</option>
                     <option value="NDCI">NDCI (Water Quality)</option>
+                    <option value="rgb-change-detection">RGB Change Detection</option>
                     <option value="illegal-construction">Illegal Construction Detection</option>
                 </select>
                 <div class="layer-description" id="layer-description-content">
@@ -635,9 +678,10 @@
         
         // Layer configurations
         const layerConfigs = {
-            'RGB': { icon: '', description: 'True Color' },
-            'NDCI': { icon: '', description: 'Chlorophyll' },
-            'illegal-construction': { icon: '', description: 'Illegal Construction' }
+            'RGB': { icon: '🌍', description: 'True Color' },
+            'NDCI': { icon: '💧', description: 'Chlorophyll' },
+            'rgb-change-detection': { icon: '🔄', description: 'RGB Changes' },
+            'illegal-construction': { icon: '🏗️', description: 'Illegal Construction' }
         };
         
         // Layer descriptions
@@ -672,20 +716,37 @@
                     <p><strong>Note:</strong> Only shows data over water bodies (land areas are masked out).</p>
                 `
             },
+            'rgb-change-detection': {
+                title: 'RGB Change Detection',
+                description: `
+                    <p><strong>What it shows:</strong> Comparison of RGB satellite images between two dates to detect significant changes.</p>
+                    <p><strong>How to interpret:</strong></p>
+                    <ul>
+                        <li><strong>Red areas:</strong> Significant changes detected (no BGT permit)</li>
+                        <li><strong>Yellow areas (with BGT):</strong> Changes with legal construction permits</li>
+                        <li><strong>Green areas (with BGT):</strong> BGT permits without detected changes</li>
+                        <li><strong>Intensity:</strong> Brighter colors indicate larger magnitude of change</li>
+                        <li><strong>No color:</strong> Areas with minimal or no change</li>
+                    </ul>
+                    <p><strong>BGT Overlay:</strong> When enabled, cross-references detected changes with official construction permits to identify potentially unauthorized developments.</p>
+                    <p><strong>How it works:</strong> Calculates the Euclidean distance between RGB pixel values from two dates.</p>
+                    <p><strong>Date control:</strong> Select any two dates for comparison - best results with clear weather days.</p>
+                    <p><strong>Threshold control:</strong> Lower values detect more subtle changes, higher values only show major changes.</p>
+                `
+            },
             'illegal-construction': {
                 title: 'Illegal Construction Detection',
                 description: `
-                    <p><strong>What it shows:</strong> Comparison of radar data between two time periods to detect potential unauthorized construction.</p>
+                    <p><strong>What it shows:</strong> Comparison of radar data to detect potential unauthorized construction.</p>
                     <p><strong>How to interpret the colors:</strong></p>
                     <ul>
-                        <li><strong>Red areas:</strong> Radar-detected changes (potential new construction)</li>
-                        <li><strong>Green areas:</strong> Legal construction permits from BGT database</li>
-                        <li><strong>Red without green:</strong> Possible unauthorized construction</li>
-                        <li><strong>Green areas:</strong> Known legal developments</li>
+                        <li><strong>Red areas:</strong> Potential unauthorized construction (radar detected, no BGT permit)</li>
+                        <li><strong>Green areas:</strong> Legal permits without construction detected</li>
+                        <li><strong>Blue areas:</strong> Confirmed legal construction (radar detected + BGT documented)</li>
                     </ul>
-                    <p><strong>How it works:</strong> Uses Sentinel-1 radar to detect structural changes, then cross-references with official BGT construction permits.</p>
+                    <p><strong>How it works:</strong> Uses Sentinel-1 radar to detect structural changes, cross-referenced with BGT permits.</p>
                     <p><strong>Best for:</strong> Urban planning enforcement, construction monitoring, compliance checking.</p>
-                    <p><strong>Limitations:</strong> May detect natural changes or miss some construction types.</p>
+                    <p><strong>Key insight:</strong> Red areas indicate possible unauthorized construction requiring investigation.</p>
                 `
             }
         };
@@ -757,25 +818,6 @@
                 
                 municipalityBounds = info.bounds;
                 
-                // Update bounds display
-                let boundsText = `
-                    SW: [${info.bounds[0][0].toFixed(4)}, ${info.bounds[0][1].toFixed(4)}]<br>
-                    NE: [${info.bounds[1][0].toFixed(4)}, ${info.bounds[1][1].toFixed(4)}]<br>
-                    Area: ~${info.area_km2} km²
-                `;
-                
-                if (info.surface_water === 'available') {
-                    boundsText += `<br>Water bodies: ${info.water_bodies_count} features`;
-                }
-                
-                if (info.bgt_data === 'available') {
-                    boundsText += `<br>BGT features: ${info.bgt_features}`;
-                } else {
-                    boundsText += `<br>No BGT data`;
-                }
-                
-                document.getElementById('bounds-info').innerHTML = boundsText;
-                
                 // Fit map to bounds
                 map.fitBounds(municipalityBounds);
                 
@@ -825,6 +867,122 @@
             }
             
             updateActiveLayersList();
+        }
+        
+        // Toggle RGB change detection layer
+        async function toggleChangeLayer() {
+            const checkbox = document.getElementById('checkbox-change');
+            const layerItem = document.getElementById('layer-change');
+            
+            if (checkbox.checked) {
+                await detectRGBChanges();
+                layerItem.classList.add('active');
+            } else {
+                removeLayer('rgb-change-detection');
+                layerItem.classList.remove('active');
+            }
+            
+            updateActiveLayersList();
+        }
+        
+        // Update change detection threshold
+        function updateChangeThreshold() {
+            const thresholdSlider = document.getElementById('change-threshold');
+            const thresholdValue = document.getElementById('threshold-value');
+            const threshold = thresholdSlider.value;
+            
+            thresholdValue.textContent = threshold;
+            
+            // If layer is active, reload it with new threshold
+            if (layers['rgb-change-detection'] && document.getElementById('checkbox-change').checked) {
+                reloadChangeLayer();
+            }
+        }
+        
+        // Toggle BGT overlay for RGB change detection
+        function toggleBGTOverlay() {
+            const checkbox = document.getElementById('checkbox-bgt-overlay');
+            const yellowLegend = document.getElementById('bgt-legend-yellow');
+            const greenLegend = document.getElementById('bgt-legend-green');
+            
+            // Show/hide BGT-specific legend items
+            if (checkbox.checked) {
+                yellowLegend.style.display = 'flex';
+                greenLegend.style.display = 'flex';
+            } else {
+                yellowLegend.style.display = 'none';
+                greenLegend.style.display = 'none';
+            }
+            
+            // If change detection layer is active, reload it with BGT overlay
+            if (layers['rgb-change-detection'] && document.getElementById('checkbox-change').checked) {
+                reloadChangeLayer();
+            }
+        }
+        
+        // Detect RGB changes
+        async function detectRGBChanges() {
+            // Get the dates and threshold from the input fields
+            const date1 = document.getElementById('change-date1').value;
+            const date2 = document.getElementById('change-date2').value;
+            const threshold = document.getElementById('change-threshold').value;
+            const includeBGT = document.getElementById('checkbox-bgt-overlay').checked;
+            
+            let statusMsg = `Analyzing RGB changes from ${date1} to ${date2} (threshold: ${threshold})`;
+            if (includeBGT) {
+                statusMsg += ' with BGT overlay';
+            }
+            statusMsg += '...';
+            updateStatus(statusMsg);
+            
+            document.querySelector('.sidebar').classList.add('loading');
+            
+            try {
+                const response = await fetch('/api/rgb-change-detection', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        date1: date1,
+                        date2: date2,
+                        threshold: parseInt(threshold),
+                        include_bgt: includeBGT  // Pass BGT overlay flag
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLayerToMap('rgb-change-detection', result.imageUrl, result.bounds);
+                    
+                    let statusMessage = `RGB change detection complete (${result.statistics.change_percentage.toFixed(2)}% of area changed)`;
+                    if (result.bgt_included && result.bgt_features) {
+                        statusMessage += ` - BGT overlay with ${result.bgt_features} features`;
+                    }
+                    updateStatus(statusMessage, 'success');
+                } else {
+                    updateStatus(`${result.error}`, 'error');
+                    document.getElementById('checkbox-change').checked = false;
+                    document.getElementById('layer-change').classList.remove('active');
+                }
+            } catch (e) {
+                updateStatus(`Error: ${e.message}`, 'error');
+                console.error(e);
+                document.getElementById('checkbox-change').checked = false;
+                document.getElementById('layer-change').classList.remove('active');
+            } finally {
+                document.querySelector('.sidebar').classList.remove('loading');
+            }
+        }
+        
+        // Reload RGB change detection layer with current date range
+        async function reloadChangeLayer() {
+            try {
+                await detectRGBChanges();
+                updateStatus('RGB change detection reloaded successfully', 'success');
+            } catch (error) {
+                console.error('Error reloading RGB change detection layer:', error);
+                updateStatus(`Error reloading RGB change detection: ${error.message}`, 'error');
+            }
         }
         
         // Load satellite layer
@@ -985,7 +1143,7 @@
         
         // Reorder layers
         function reorderLayers() {
-            const layerOrder = ['RGB', 'NDCI', 'illegal-construction'];
+            const layerOrder = ['RGB', 'NDCI', 'rgb-change-detection', 'illegal-construction'];
             
             layerOrder.forEach(layerId => {
                 if (layers[layerId]) {
@@ -994,7 +1152,7 @@
             });
         }
         
-        // Update active layers list (description panel is now always visible)
+        // Update active layers list
         function updateActiveLayersList() {
             const activeLayersList = document.getElementById('active-layers-list');
             const activeLayersContent = document.getElementById('active-layers-content');
@@ -1017,34 +1175,6 @@
             } else {
                 // Hide active layers list when no layers are active
                 activeLayersList.style.display = 'none';
-            }
-            
-            // Description panel remains always visible with all options
-        }
-        
-        // Clear cache
-        async function clearCache() {
-            updateStatus('Clearing cache...');
-            
-            try {
-                const response = await fetch('/api/clear-cache', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        product_type: 'all'
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    updateStatus(`${result.message}`, 'success');
-                } else {
-                    updateStatus('Failed to clear cache', 'error');
-                }
-            } catch (e) {
-                console.error('Error clearing cache:', e);
-                updateStatus('Error clearing cache', 'error');
             }
         }
         
@@ -1086,6 +1216,46 @@
                     updateStatus(`Comparison date changed to ${date2}, reloading illegal construction analysis...`);
                     await reloadIllegalConstructionLayer();
                 }
+            });
+            
+            // RGB change detection date changes - automatically reload if layer is active
+            document.getElementById('change-date1').addEventListener('change', async function(e) {
+                if (layers['rgb-change-detection'] && document.getElementById('checkbox-change').checked) {
+                    const date1 = e.target.value;
+                    const date2 = document.getElementById('change-date2').value;
+                    updateStatus(`Reference date changed to ${date1}, reloading RGB change detection...`);
+                    await reloadChangeLayer();
+                }
+            });
+            
+            document.getElementById('change-date2').addEventListener('change', async function(e) {
+                if (layers['rgb-change-detection'] && document.getElementById('checkbox-change').checked) {
+                    const date1 = document.getElementById('change-date1').value;
+                    const date2 = e.target.value;
+                    updateStatus(`Comparison date changed to ${date2}, reloading RGB change detection...`);
+                    await reloadChangeLayer();
+                }
+            });
+            
+            // RGB change detection threshold changes - automatically reload if layer is active
+            let thresholdTimeout;
+            document.getElementById('change-threshold').addEventListener('input', function(e) {
+                // Update the display value immediately
+                document.getElementById('threshold-value').textContent = e.target.value;
+                
+                // Debounce the reload to avoid too many API calls while dragging
+                if (layers['rgb-change-detection'] && document.getElementById('checkbox-change').checked) {
+                    clearTimeout(thresholdTimeout);
+                    thresholdTimeout = setTimeout(async () => {
+                        updateStatus(`Threshold changed to ${e.target.value}, reloading RGB change detection...`);
+                        await reloadChangeLayer();
+                    }, 500); // Wait 500ms after user stops dragging
+                }
+            });
+            
+            // BGT overlay checkbox change - automatically reload if layer is active
+            document.getElementById('checkbox-bgt-overlay').addEventListener('change', function(e) {
+                toggleBGTOverlay();
             });
             
             // Map click for coordinates
@@ -1145,8 +1315,8 @@
         
         // Log startup
         console.log('Alkmaar Municipality Satellite & Radar Analysis');
-        console.log('Features: RGB imagery, NDCI water analysis, Illegal construction detection');
-        console.log('All date ranges are now customizable');
+        console.log('Features: RGB imagery, NDCI water analysis, RGB change detection, Illegal construction detection');
+        console.log('All date ranges are customizable');
     </script>
 </body>
 </html>

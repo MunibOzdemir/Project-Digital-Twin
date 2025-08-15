@@ -53,3 +53,7 @@ If you want to convert your .ipynb file to .py, you can use jupytext:
 `jupytext src/Project.ipynb --to py`
 
 Create a new cell in the Python file with `# %%`
+
+## Setting up the webapp
+
+To run the webapp, run the `web_backend.py` file.

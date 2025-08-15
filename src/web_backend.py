@@ -66,26 +66,6 @@ print(f"Cache directory: {CACHE_DIR}")
 print(f"Data directory: {DATA_DIR}")
 
 # ================================
-# AUTO-CLEAR CACHE ON STARTUP (FOR TESTING)
-# ================================
-
-def clear_cache_on_startup():
-    """Clear all cache files on server startup for testing purposes"""
-    try:
-        cache_files = list(CACHE_DIR.glob('*.pkl'))
-        for f in cache_files:
-            f.unlink()
-        if cache_files:
-            print(f"Testing mode: Cleared {len(cache_files)} cache files on startup")
-        else:
-            print("Testing mode: No cache files to clear")
-    except Exception as e:
-        print(f"Failed to clear cache on startup: {e}")
-
-# Clear cache on startup for testing
-clear_cache_on_startup()
-
-# ================================
 # GEOJSON PROCESSING
 # ================================
 
@@ -632,6 +612,284 @@ def load_from_cache(cache_key):
     return None
 
 # ================================
+# RGB CHANGE DETECTION
+# ================================
+
+def fetch_rgb_image_for_change_detection(date):
+    """Fetch RGB image for the exact date specified by user"""
+    
+    token = get_sentinel_token()
+    if not token:
+        return None
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    # Parse date
+    if isinstance(date, str):
+        date_obj = datetime.fromisoformat(date)
+    else:
+        date_obj = date
+    
+    # Use exact date only
+    start_date = date_obj.strftime("%Y-%m-%dT00:00:00Z")
+    end_date = date_obj.strftime("%Y-%m-%dT23:59:59Z")
+    
+    print(f"Fetching RGB image for exact date: {date}")
+    
+    # Simple RGB evalscript with brightness enhancement
+    evalscript = """
+        //VERSION=3
+        function setup() {
+            return {
+                input: ["B02", "B03", "B04", "dataMask"],
+                output: { bands: 4, sampleType: "UINT8" }
+            };
+        }
+        
+        function evaluatePixel(sample) {
+            // RGB with enhancement and alpha
+            return [
+                Math.min(255, sample.B04 * 2.5 * 255),  // Red
+                Math.min(255, sample.B03 * 2.5 * 255),  // Green
+                Math.min(255, sample.B02 * 2.5 * 255),  // Blue
+                sample.dataMask * 255                    // Alpha
+            ];
+        }
+    """
+    
+    # Request payload - no cloud filtering
+    payload = {
+        "input": {
+            "bounds": {
+                "geometry": ALKMAAR_GEOMETRY,
+                "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"}
+            },
+            "data": [{
+                "type": "S2L2A",
+                "dataFilter": {
+                    "timeRange": {"from": start_date, "to": end_date}
+                }
+            }]
+        },
+        "evalscript": evalscript,
+        "output": {
+            "width": 2048,
+            "height": 2048,
+            "responses": [{
+                "identifier": "default",
+                "format": {"type": "image/png"}
+            }]
+        }
+    }
+    
+    try:
+        response = requests.post(PROCESS_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        # Load image directly as PNG
+        img = Image.open(io.BytesIO(response.content))
+        
+        # Convert to numpy array
+        data = np.array(img, dtype=np.uint8)
+        
+        print(f"Successfully fetched RGB image for {date}")
+        print(f"   Shape: {data.shape}, Data range: [{data.min()}, {data.max()}]")
+        
+        return data
+        
+    except Exception as e:
+        print(f"Error fetching RGB image for {date}: {e}")
+        return None
+
+def detect_rgb_changes(date1, date2, threshold=50):
+    """
+    Detect changes between two RGB images using simple change detection.
+    
+    Args:
+        date1: str - Reference date (earlier)
+        date2: str - Comparison date (later)
+        threshold: int - Change magnitude threshold
+    
+    Returns:
+        dict with change detection results
+    """
+    print(f"Detecting RGB changes between {date1} and {date2} (threshold: {threshold})")
+    
+    # Check cache first - include threshold in cache key
+    cache_key = get_cache_key('rgb_change', f"{date1}_{date2}", threshold=threshold)
+    cached_result = load_from_cache(cache_key)
+    if cached_result is not None:
+        return cached_result
+    
+    try:
+        # Fetch RGB images for both dates
+        print("Fetching reference RGB image...")
+        image1 = fetch_rgb_image_for_change_detection(date1)
+        
+        print("Fetching comparison RGB image...")
+        image2 = fetch_rgb_image_for_change_detection(date2)
+        
+        if image1 is None or image2 is None:
+            print("Failed to fetch RGB images for change detection")
+            return None
+        
+        # Convert to float for calculations (RGB only, ignore alpha)
+        img1_float = image1[:, :, :3].astype(np.float32)
+        img2_float = image2[:, :, :3].astype(np.float32)
+        
+        # 1. Simple Difference
+        difference = img2_float - img1_float
+        
+        # 2. Absolute Difference
+        abs_difference = np.abs(difference)
+        
+        # 3. Normalized Difference
+        # Avoid division by zero
+        sum_images = img1_float + img2_float + 1
+        norm_difference = difference / sum_images
+        
+        # 4. Change Magnitude (Euclidean distance in RGB space)
+        change_magnitude = np.sqrt(np.sum(difference**2, axis=2))
+        
+        # 5. Identify significant changes (threshold)
+        significant_change = change_magnitude > threshold
+        
+        # Calculate statistics
+        total_pixels = significant_change.size
+        changed_pixels = np.sum(significant_change)
+        change_percentage = (changed_pixels / total_pixels) * 100
+        
+        print(f"Change Statistics:")
+        print(f"   Total pixels: {total_pixels:,}")
+        print(f"   Changed pixels: {changed_pixels:,}")
+        print(f"   Change percentage: {change_percentage:.2f}%")
+        
+        result = {
+            'image1': image1,
+            'image2': image2,
+            'img1_float': img1_float,
+            'img2_float': img2_float,
+            'difference': difference,
+            'abs_difference': abs_difference,
+            'norm_difference': norm_difference,
+            'change_magnitude': change_magnitude,
+            'significant_change': significant_change,
+            'threshold_used': threshold,
+            'statistics': {
+                'total_pixels': int(total_pixels),
+                'changed_pixels': int(changed_pixels),
+                'change_percentage': float(change_percentage)
+            },
+            'dates': {'reference': date1, 'comparison': date2}
+        }
+        
+        # Cache the result
+        save_to_cache(cache_key, result)
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in RGB change detection: {e}")
+        return None
+
+def create_rgb_change_visualization(change_results, include_bgt=False):
+    """Create visualization for RGB change detection with optional BGT overlay"""
+    
+    if change_results is None:
+        return None
+    
+    try:
+        # Extract data
+        significant_change = change_results['significant_change']
+        change_magnitude = change_results['change_magnitude']
+        
+        # Create RGBA image
+        height, width = significant_change.shape
+        rgba = np.zeros((height, width, 4), dtype=np.uint8)
+        
+        # If BGT overlay requested and available
+        bgt_mask = None
+        if include_bgt and BGT_DATA is not None:
+            try:
+                # Get bounds and create transform
+                bounds = get_bounds_from_geometry(ALKMAAR_GEOMETRY)
+                transform = from_bounds(bounds[0], bounds[1], bounds[2], bounds[3], width, height)
+                
+                # Rasterize BGT polygons to same resolution as change detection
+                bgt_mask = rasterize(
+                    [(geom, 1) for geom in BGT_DATA.geometry if geom is not None],
+                    out_shape=(height, width),
+                    transform=transform,
+                    fill=0,
+                    dtype='uint8'
+                ) > 0
+                
+                print(f"Added BGT overlay to RGB change detection: {np.sum(bgt_mask)} pixels")
+                
+            except Exception as e:
+                print(f"Could not add BGT overlay: {e}")
+                bgt_mask = None
+        
+        # Apply color scheme with BGT overlay
+        if bgt_mask is not None:
+            # Categories for RGB change detection with BGT:
+            # 1. Changes WITH BGT permits (legal construction) - YELLOW
+            # 2. Changes WITHOUT BGT permits (potentially unauthorized) - RED
+            # 3. BGT permits WITHOUT changes (permits only) - GREEN (semi-transparent)
+            
+            changes_with_bgt = significant_change & bgt_mask  # Yellow: changes + BGT
+            changes_without_bgt = significant_change & ~bgt_mask  # Red: changes only
+            bgt_without_changes = bgt_mask & ~significant_change  # Green: BGT only
+            
+            # Yellow for changes with BGT permits (likely legal construction)
+            rgba[changes_with_bgt, 0] = 255  # Red channel
+            rgba[changes_with_bgt, 1] = 255  # Green channel (makes yellow)
+            rgba[changes_with_bgt, 3] = 200  # Alpha
+            
+            # Red for changes without BGT permits (potentially unauthorized)
+            if np.max(change_magnitude) > 0:
+                # Use intensity based on change magnitude
+                normalized_magnitude = np.clip(change_magnitude / np.max(change_magnitude), 0, 1)
+                intensity = (normalized_magnitude * 255).astype(np.uint8)
+                rgba[changes_without_bgt, 0] = intensity[changes_without_bgt]  # Variable red
+            else:
+                rgba[changes_without_bgt, 0] = 255  # Full red
+            rgba[changes_without_bgt, 3] = 200  # Alpha
+            
+            # Green for BGT permits without detected changes (semi-transparent)
+            rgba[bgt_without_changes, 1] = 180  # Green channel
+            rgba[bgt_without_changes, 3] = 100  # Lower alpha for subtle overlay
+            
+        else:
+            # No BGT data - original visualization with just red for changes
+            if np.max(change_magnitude) > 0:
+                normalized_magnitude = np.clip(change_magnitude / np.max(change_magnitude), 0, 1)
+                intensity = (normalized_magnitude * 255).astype(np.uint8)
+                rgba[significant_change, 0] = intensity[significant_change]  # Variable red intensity
+            else:
+                rgba[significant_change, 0] = 255  # Full red
+            rgba[significant_change, 3] = 200  # Alpha
+        
+        # Create PIL image
+        image = Image.fromarray(rgba, mode='RGBA')
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        return img_base64
+        
+    except Exception as e:
+        print(f"Error creating RGB change visualization: {e}")
+        return None
+
+# ================================
 # SENTINEL HUB DATA FETCHING - OPTICAL
 # ================================
 
@@ -792,12 +1050,12 @@ def fetch_sentinel_data(product_type, date, max_cloud=30, apply_water_mask=False
         return None
 
 # ================================
-# SENTINEL-1 RADAR DATA FETCHING (FROM PROJECT.PY)
+# SENTINEL-1 RADAR DATA FETCHING
 # ================================
 
 def fetch_sentinel1_product(product_type, start_date, orbit_direction="DESCENDING"):
     """
-    Fetch Sentinel-1 radar products (from radar_copernicus_test.py).
+    Fetch Sentinel-1 radar products.
     
     Args:
         product_type: str - 'VV', 'VH', 'RGB_VV_VH'
@@ -968,12 +1226,12 @@ def fetch_sentinel1_product(product_type, start_date, orbit_direction="DESCENDIN
         return None
 
 # ================================
-# RADAR CHANGE DETECTION (FROM PROJECT.PY)
+# RADAR CHANGE DETECTION
 # ================================
 
 def detect_radar_changes(date1='2019-06-01', date2='2022-06-01', threshold=0.05):
     """
-    Detect changes using radar data (simplified from Project.py).
+    Detect changes using radar data.
     
     Args:
         date1: str - Reference date
@@ -1049,7 +1307,7 @@ def detect_radar_changes(date1='2019-06-01', date2='2022-06-01', threshold=0.05)
 
 def detect_illegal_construction_radar(date1='2019-06-01', date2='2022-06-01'):
     """
-    Detect potential illegal construction using radar + BGT (from Project.py).
+    Detect potential illegal construction using radar + BGT.
     Now accepts custom dates as parameters.
     """
     print(f"Detecting potential illegal construction ({date1} to {date2})")
@@ -1215,7 +1473,7 @@ def array_to_base64_image(data, product_type='RGB', opacity=0.8):
         return None
 
 def create_illegal_construction_visualization(radar_results, include_bgt=False):
-    """Create visualization for illegal construction detection with optional BGT overlay"""
+    """Create visualization for illegal construction detection with distinct color scheme"""
     
     if radar_results is None:
         return None
@@ -1235,11 +1493,8 @@ def create_illegal_construction_visualization(radar_results, include_bgt=False):
         height, width = positive_changes_mask.shape
         rgba = np.zeros((height, width, 4), dtype=np.uint8)
         
-        # Set red for positive changes (potential construction)
-        rgba[positive_changes_mask, 0] = 255  # Red channel
-        rgba[positive_changes_mask, 3] = 200  # Alpha
-        
-        # If BGT overlay requested and available - PROPERLY RASTERIZE BGT
+        # If BGT overlay requested and available
+        bgt_mask = None
         if include_bgt and BGT_DATA is not None:
             try:
                 # Get bounds and create transform
@@ -1253,16 +1508,41 @@ def create_illegal_construction_visualization(radar_results, include_bgt=False):
                     transform=transform,
                     fill=0,
                     dtype='uint8'
-                )
+                ) > 0
                 
-                # Add green overlay for BGT areas
-                rgba[bgt_mask > 0, 1] = 255  # Green channel for legal construction
-                rgba[bgt_mask > 0, 3] = 200  # Alpha
-                
-                print(f"Added BGT overlay: {np.sum(bgt_mask > 0)} pixels")
+                print(f"Added BGT overlay: {np.sum(bgt_mask)} pixels")
                 
             except Exception as e:
                 print(f"Could not add BGT overlay: {e}")
+                bgt_mask = None
+        
+        # Apply distinct color scheme (no overlapping)
+        if bgt_mask is not None:
+            # Three distinct categories:
+            # 1. Radar changes WITH BGT permits (confirmed legal construction) - BLUE
+            # 2. Radar changes WITHOUT BGT permits (potential unauthorized) - RED  
+            # 3. BGT permits WITHOUT radar changes (legal permits, no construction detected) - GREEN
+            
+            confirmed_legal = positive_changes_mask & bgt_mask  # Blue: radar + BGT
+            unauthorized = positive_changes_mask & ~bgt_mask    # Red: radar only
+            permitted_only = bgt_mask & ~positive_changes_mask  # Green: BGT only
+            
+            # Blue for confirmed legal construction (radar detected + BGT documented)
+            rgba[confirmed_legal, 2] = 255  # Blue channel
+            rgba[confirmed_legal, 3] = 200  # Alpha
+            
+            # Red for potential unauthorized construction (radar detected, no BGT)
+            rgba[unauthorized, 0] = 255     # Red channel
+            rgba[unauthorized, 3] = 200     # Alpha
+            
+            # Green for legal permits without radar detection
+            rgba[permitted_only, 1] = 255   # Green channel
+            rgba[permitted_only, 3] = 200   # Alpha
+            
+        else:
+            # No BGT data available - just show radar changes in red
+            rgba[positive_changes_mask, 0] = 255  # Red channel
+            rgba[positive_changes_mask, 3] = 200  # Alpha
         
         # Create PIL image
         image = Image.fromarray(rgba, mode='RGBA')
@@ -1415,6 +1695,58 @@ def get_illegal_construction():
         print(f"Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/rgb-change-detection', methods=['POST'])
+def get_rgb_change_detection():
+    """Get RGB change detection analysis with optional BGT overlay"""
+    try:
+        data = request.get_json()
+        date1 = data.get('date1', '2023-06-01')
+        date2 = data.get('date2', '2024-06-01')
+        threshold = data.get('threshold', 50)
+        include_bgt = data.get('include_bgt', False)  # New parameter for BGT overlay
+        
+        print(f"\nRGB change detection: {date1} to {date2}")
+        if include_bgt:
+            print(f"   Including BGT overlay")
+        
+        # Detect changes using RGB comparison
+        results = detect_rgb_changes(date1, date2, threshold)
+        
+        if results is None:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to detect RGB changes'
+            }), 500
+        
+        # Create visualization with optional BGT overlay
+        image_b64 = create_rgb_change_visualization(results, include_bgt=include_bgt)
+        
+        if image_b64 is None:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create visualization'
+            }), 500
+        
+        # Add BGT info to response
+        response_data = {
+            'success': True,
+            'imageUrl': f'data:image/png;base64,{image_b64}',
+            'bounds': ALKMAAR_BOUNDS,
+            'statistics': results['statistics'],
+            'dates': results['dates'],
+            'bgt_included': include_bgt,
+            'bgt_available': BGT_DATA is not None
+        }
+        
+        if include_bgt and BGT_DATA is not None:
+            response_data['bgt_features'] = len(BGT_DATA)
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/download-bgt', methods=['POST'])
 def download_bgt_data():
     """Download BGT data for Alkmaar"""
@@ -1454,30 +1786,6 @@ def download_bgt_data():
             'success': False, 
             'error': f'BGT download failed: {str(e)}'
         }), 500
-def clear_cache():
-    """Clear cache for specific product or all"""
-    try:
-        data = request.get_json() or {}
-        product_type = data.get('product_type', 'all')
-        
-        if product_type == 'all':
-            cache_files = list(CACHE_DIR.glob('*.pkl'))
-            for f in cache_files:
-                f.unlink()
-            message = f"Cleared {len(cache_files)} cache files"
-        else:
-            count = 0
-            for f in CACHE_DIR.glob('*.pkl'):
-                if product_type.lower() in f.name.lower():
-                    f.unlink()
-                    count += 1
-            message = f"Cleared {count} cache files for {product_type}"
-        
-        print(f"{message}")
-        return jsonify({'success': True, 'message': message})
-        
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/info', methods=['GET'])
 def get_info():
@@ -1544,14 +1852,13 @@ def main(port=5000, debug=True):
     print(f"\nAPI Endpoints:")
     print(f"   POST /api/satellite-data      - Optical imagery (RGB, NDCI)")
     print(f"   POST /api/illegal-construction - Illegal construction analysis")
+    print(f"   POST /api/rgb-change-detection - RGB change detection")
     print(f"   POST /api/download-bgt        - Download BGT data")
-    print(f"   POST /api/clear-cache        - Clear cache")
     print(f"   GET  /api/info              - System information")
     
     print(f"\nStarting server on http://localhost:{port}")
-    print(f"\nTips:")
-    print(f"   • Cache is cleared on startup for testing")
-    print(f"   • All date ranges are now customizable")
+    print(f"\nFeatures:")
+    print(f"   • All date ranges are customizable")
     print(f"   • BGT data shows as green overlay")
     print(f"   • Red areas = radar-detected changes")
     print(f"   • Green areas = BGT documented (legal)")
