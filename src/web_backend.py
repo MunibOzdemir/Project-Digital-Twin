@@ -838,7 +838,7 @@ def create_rgb_change_visualization(change_results, include_bgt=False):
             # Categories for RGB change detection with BGT:
             # 1. Changes WITH BGT permits (legal construction) - YELLOW
             # 2. Changes WITHOUT BGT permits (potentially unauthorized) - RED
-            # 3. BGT permits WITHOUT changes (permits only) - GREEN (semi-transparent)
+            # 3. BGT permits WITHOUT changes (permits only) - GREEN (fully opaque)
             
             changes_with_bgt = significant_change & bgt_mask  # Yellow: changes + BGT
             changes_without_bgt = significant_change & ~bgt_mask  # Red: changes only
@@ -847,31 +847,22 @@ def create_rgb_change_visualization(change_results, include_bgt=False):
             # Yellow for changes with BGT permits (likely legal construction)
             rgba[changes_with_bgt, 0] = 255  # Red channel
             rgba[changes_with_bgt, 1] = 255  # Green channel (makes yellow)
-            rgba[changes_with_bgt, 3] = 200  # Alpha
+            rgba[changes_with_bgt, 3] = 255  # Alpha (fully opaque)
             
-            # Red for changes without BGT permits (potentially unauthorized)
-            if np.max(change_magnitude) > 0:
-                # Use intensity based on change magnitude
-                normalized_magnitude = np.clip(change_magnitude / np.max(change_magnitude), 0, 1)
-                intensity = (normalized_magnitude * 255).astype(np.uint8)
-                rgba[changes_without_bgt, 0] = intensity[changes_without_bgt]  # Variable red
-            else:
-                rgba[changes_without_bgt, 0] = 255  # Full red
-            rgba[changes_without_bgt, 3] = 200  # Alpha
+            # Full red for all changes without BGT permits (more visible)
+            rgba[changes_without_bgt, 0] = 255  # Full red intensity for better visibility
+            rgba[changes_without_bgt, 3] = 255  # Alpha (fully opaque)
             
-            # Green for BGT permits without detected changes (semi-transparent)
-            rgba[bgt_without_changes, 1] = 180  # Green channel
-            rgba[bgt_without_changes, 3] = 100  # Lower alpha for subtle overlay
+            # Green for BGT permits without detected changes (fully opaque)
+            rgba[bgt_without_changes, 0] = 0    # Red channel
+            rgba[bgt_without_changes, 1] = 200  # Green channel  
+            rgba[bgt_without_changes, 2] = 0    # Blue channel
+            rgba[bgt_without_changes, 3] = 255  # Alpha (fully opaque)
             
         else:
-            # No BGT data - original visualization with just red for changes
-            if np.max(change_magnitude) > 0:
-                normalized_magnitude = np.clip(change_magnitude / np.max(change_magnitude), 0, 1)
-                intensity = (normalized_magnitude * 255).astype(np.uint8)
-                rgba[significant_change, 0] = intensity[significant_change]  # Variable red intensity
-            else:
-                rgba[significant_change, 0] = 255  # Full red
-            rgba[significant_change, 3] = 200  # Alpha
+            # No BGT data - use full red for all changes (better visibility)
+            rgba[significant_change, 0] = 255  # Full red intensity
+            rgba[significant_change, 3] = 255  # Alpha (fully opaque)
         
         # Create PIL image
         image = Image.fromarray(rgba, mode='RGBA')
@@ -887,6 +878,56 @@ def create_rgb_change_visualization(change_results, include_bgt=False):
         
     except Exception as e:
         print(f"Error creating RGB change visualization: {e}")
+        return None
+
+def create_bgt_standalone_visualization():
+    """Create standalone visualization for BGT data"""
+    
+    if BGT_DATA is None:
+        return None
+    
+    try:
+        # Create a reasonable resolution for BGT visualization
+        width, height = 2048, 2048
+        
+        # Get bounds and create transform
+        bounds = get_bounds_from_geometry(ALKMAAR_GEOMETRY)
+        transform = from_bounds(bounds[0], bounds[1], bounds[2], bounds[3], width, height)
+        
+        # Rasterize BGT polygons
+        bgt_mask = rasterize(
+            [(geom, 1) for geom in BGT_DATA.geometry if geom is not None],
+            out_shape=(height, width),
+            transform=transform,
+            fill=0,
+            dtype='uint8'
+        ) > 0
+        
+        print(f"Created standalone BGT visualization: {np.sum(bgt_mask)} pixels")
+        
+        # Create RGBA image
+        rgba = np.zeros((height, width, 4), dtype=np.uint8)
+        
+        # Green for BGT permits (fully opaque)
+        rgba[bgt_mask, 0] = 0     # Red channel
+        rgba[bgt_mask, 1] = 200   # Green channel
+        rgba[bgt_mask, 2] = 0     # Blue channel
+        rgba[bgt_mask, 3] = 255   # Alpha (fully opaque)
+        
+        # Create PIL image
+        image = Image.fromarray(rgba, mode='RGBA')
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        
+        return img_base64
+        
+    except Exception as e:
+        print(f"Error creating BGT visualization: {e}")
         return None
 
 # ================================
@@ -1697,14 +1738,36 @@ def get_illegal_construction():
 
 @app.route('/api/rgb-change-detection', methods=['POST'])
 def get_rgb_change_detection():
-    """Get RGB change detection analysis with optional BGT overlay"""
+    """Get RGB change detection analysis with optional BGT overlay, or just BGT if no changes requested"""
     try:
         data = request.get_json()
         date1 = data.get('date1', '2023-06-01')
         date2 = data.get('date2', '2024-06-01')
         threshold = data.get('threshold', 50)
-        include_bgt = data.get('include_bgt', False)  # New parameter for BGT overlay
+        include_bgt = data.get('include_bgt', False)  # BGT overlay flag
+        bgt_only = data.get('bgt_only', False)  # New flag for BGT-only visualization
         
+        # If BGT-only mode is requested
+        if bgt_only and BGT_DATA is not None:
+            print("\nGenerating BGT-only visualization")
+            image_b64 = create_bgt_standalone_visualization()
+            
+            if image_b64 is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to create BGT visualization'
+                }), 500
+            
+            return jsonify({
+                'success': True,
+                'imageUrl': f'data:image/png;base64,{image_b64}',
+                'bounds': ALKMAAR_BOUNDS,
+                'bgt_only': True,
+                'bgt_features': len(BGT_DATA),
+                'message': f'BGT permits layer with {len(BGT_DATA)} features'
+            })
+        
+        # Normal RGB change detection flow
         print(f"\nRGB change detection: {date1} to {date2}")
         if include_bgt:
             print(f"   Including BGT overlay")
@@ -1747,7 +1810,38 @@ def get_rgb_change_detection():
         print(f"Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/download-bgt', methods=['POST'])
+@app.route('/api/bgt-layer', methods=['GET'])
+def get_bgt_layer():
+    """Get standalone BGT layer visualization"""
+    try:
+        print("Generating standalone BGT layer visualization...")
+        
+        if BGT_DATA is None:
+            return jsonify({
+                'success': False,
+                'error': 'BGT data not available. Please download BGT data first.'
+            }), 404
+        
+        # Create BGT visualization
+        image_b64 = create_bgt_standalone_visualization()
+        
+        if image_b64 is None:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create BGT visualization'
+            }), 500
+        
+        return jsonify({
+            'success': True,
+            'imageUrl': f'data:image/png;base64,{image_b64}',
+            'bounds': ALKMAAR_BOUNDS,
+            'bgt_features': len(BGT_DATA),
+            'message': f'BGT layer with {len(BGT_DATA)} construction permits'
+        })
+        
+    except Exception as e:
+        print(f"Error generating BGT layer: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 def download_bgt_data():
     """Download BGT data for Alkmaar"""
     try:
@@ -1852,7 +1946,7 @@ def main(port=5000, debug=True):
     print(f"\nAPI Endpoints:")
     print(f"   POST /api/satellite-data      - Optical imagery (RGB, NDCI)")
     print(f"   POST /api/illegal-construction - Illegal construction analysis")
-    print(f"   POST /api/rgb-change-detection - RGB change detection")
+    print(f"   POST /api/rgb-change-detection - RGB change detection with BGT")
     print(f"   POST /api/download-bgt        - Download BGT data")
     print(f"   GET  /api/info              - System information")
     
