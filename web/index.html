@@ -838,6 +838,7 @@
         }
         
         // Toggle BGT overlay - now loads BGT visualization immediately
+        // Toggle BGT overlay - only affects RGB change detection if it's already active
         async function toggleBGTOverlay() {
             const checkbox = document.getElementById('checkbox-bgt-overlay');
             const yellowLegend = document.getElementById('bgt-legend-yellow');
@@ -848,8 +849,10 @@
                 yellowLegend.style.display = 'flex';
                 greenLegend.style.display = 'flex';
                 
-                // Load RGB change detection with BGT overlay immediately
-                await detectRGBChanges();
+                // Only reload RGB change detection if it's already active
+                if (layers['rgb-change-detection'] && document.getElementById('checkbox-change').checked) {
+                    await detectRGBChanges();
+                }
             } else {
                 yellowLegend.style.display = 'none';
                 greenLegend.style.display = 'none';
@@ -857,9 +860,6 @@
                 // If change detection is active, reload without BGT
                 if (layers['rgb-change-detection'] && document.getElementById('checkbox-change').checked) {
                     await detectRGBChanges();
-                } else {
-                    // Just remove the layer if change detection is not active
-                    removeLayer('rgb-change-detection');
                 }
             }
         }
