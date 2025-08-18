@@ -457,7 +457,7 @@
                 <div class="control-section">
                     <h3>Date Selection</h3>
                     <div class="date-selector">
-                        <input type="date" id="selected-date" class="date-input" value="2025-08-14">
+                        <input type="date" id="selected-date" class="date-input" value="2024-08-12">
                     </div>
                 </div>
                 
@@ -474,8 +474,8 @@
                         </div>
                         <div class="layer-controls">
                             <input type="range" class="opacity-slider" id="opacity-rgb" 
-                                   min="0" max="100" value="80" onchange="updateOpacity('RGB')">
-                            <span class="opacity-value" id="opacity-value-rgb">80%</span>
+                                   min="0" max="100" value="100" onchange="updateOpacity('RGB')">
+                            <span class="opacity-value" id="opacity-value-rgb">100%</span>
                         </div>
                     </div>
                     
@@ -488,8 +488,8 @@
                         </div>
                         <div class="layer-controls">
                             <input type="range" class="opacity-slider" id="opacity-ndci" 
-                                   min="0" max="100" value="80" onchange="updateOpacity('NDCI')">
-                            <span class="opacity-value" id="opacity-value-ndci">80%</span>
+                                   min="0" max="100" value="100" onchange="updateOpacity('NDCI')">
+                            <span class="opacity-value" id="opacity-value-ndci">100%</span>
                         </div>
                     </div>
                     
@@ -525,7 +525,7 @@
                         </div>
                         <div class="date-group">
                             <label>Comparison Date</label>
-                            <input type="date" id="change-date2" class="date-input" value="2025-08-14">
+                            <input type="date" id="change-date2" class="date-input" value="2024-08-12">
                         </div>
                     </div>
                     
@@ -585,6 +585,44 @@
                     </div>
                 </div>
                 
+                <!-- Heat Risk Analysis -->
+                <div class="control-section">
+                    <h3>Heat Risk Analysis</h3>
+                    <p style="font-size: 12px; color: #6c757d; margin-bottom: 15px;">
+                        Visualize heat-related mortality risk for elderly populations
+                    </p>
+                    
+                    <!-- Heat Risk Layer Toggle -->
+                    <div class="layer-item" id="layer-heat-risk">
+                        <input type="checkbox" class="layer-checkbox" id="checkbox-heat-risk" onchange="toggleHeatRiskLayer()">
+                        <div class="layer-info">
+                            <div class="layer-name">Heat Risk Map</div>
+                            <div class="layer-description">Risk due to heat waves</div>
+                        </div>
+                        <div class="layer-controls">
+                            <input type="range" class="opacity-slider" id="opacity-heat-risk" 
+                                min="0" max="100" value="100" onchange="updateHeatRiskOpacity()">
+                            <span class="opacity-value" id="opacity-value-heat-risk">100%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Heat Risk Legend -->
+                    <div class="legend" id="heat-risk-legend" style="display: none;">
+                        <h4>Risk Level</h4>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <div style="flex: 1; height: 20px; background: linear-gradient(to right, #1a9641, #a6d96a, #ffffbf, #fdae61, #d7191c); border-radius: 3px;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: #6c757d;">
+                            <span>Low</span>
+                            <span>Medium</span>
+                            <span>High</span>
+                        </div>
+                        <div style="font-size: 10px; color: #6c757d; margin-top: 5px;">
+                            Green = Lower risk | Red = Higher risk
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Status Bar -->
                 <div id="status" class="status-bar">
                     Initializing application...
@@ -615,6 +653,7 @@
                     <option value="RGB">RGB (True Color)</option>
                     <option value="NDCI">NDCI (Water Quality)</option>
                     <option value="rgb-change-detection">RGB Change Detection</option>
+                    <option value="heat-risk">Heat Risk Analysis</option>
                 </select>
                 <div class="layer-description" id="layer-description-content">
                     Select a layer above to see its description and interpretation guide.
@@ -629,12 +668,15 @@
         let map;
         let layers = {};
         let municipalityBounds = null;
+        let currentHeatRiskScenario = null;
+        let heatRiskLayer = null;
         
         // Layer configurations
         const layerConfigs = {
             'RGB': { icon: '🌍', description: 'True Color' },
             'NDCI': { icon: '💧', description: 'Chlorophyll' },
-            'rgb-change-detection': { icon: '🔄', description: 'RGB Changes' }
+            'rgb-change-detection': { icon: '🔄', description: 'RGB Changes' },
+            'heat-risk': { icon: '🌡️', description: 'Heat Risk' }
         };
         
         // Layer descriptions
@@ -685,6 +727,26 @@
                     <p><strong>How it works:</strong> Calculates the Euclidean distance between RGB pixel values from two dates.</p>
                     <p><strong>Date control:</strong> Select any two dates for comparison - best results with clear weather days.</p>
                     <p><strong>Threshold control:</strong> Lower values detect more subtle changes, higher values only show major changes.</p>
+                `
+            },
+            'heat-risk': {
+                title: 'Heat Risk Analysis',
+                description: `
+                    <p><strong>What it shows:</strong> Heat-related mortality risk for elderly populations (65+) during extreme heat events.</p>
+                    <p><strong>How to interpret the colors:</strong></p>
+                    <ul>
+                        <li><strong>Green areas:</strong> Lower mortality risk</li>
+                        <li><strong>Yellow areas:</strong> Moderate mortality risk</li>
+                        <li><strong>Orange/Red areas:</strong> Higher mortality risk</li>
+                    </ul>
+                    <p><strong>Risk factors considered:</strong></p>
+                    <ul>
+                        <li>Urban heat island effect</li>
+                        <li>Population density of elderly residents</li>
+                        <li>Green space availability</li>
+                        <li>Building density and materials</li>
+                    </ul>
+                    <p><strong>Best for:</strong> Urban planning, public health assessment, green infrastructure planning, climate adaptation strategies.</p>
                 `
             }
         };
@@ -837,8 +899,7 @@
             }
         }
         
-        // Toggle BGT overlay - now loads BGT visualization immediately
-        // Toggle BGT overlay - only affects RGB change detection if it's already active
+        // Toggle BGT overlay
         async function toggleBGTOverlay() {
             const checkbox = document.getElementById('checkbox-bgt-overlay');
             const yellowLegend = document.getElementById('bgt-legend-yellow');
@@ -974,42 +1035,112 @@
             }
         }
         
-        // Detect illegal construction
-        async function detectIllegalConstruction() {
-            // Get the dates from the input fields
-            const date1 = document.getElementById('illegal-date1').value;
-            const date2 = document.getElementById('illegal-date2').value;
+        // Heat Risk Visualization
+        async function toggleHeatRiskLayer() {
+            const checkbox = document.getElementById('checkbox-heat-risk');
+            const layerItem = document.getElementById('layer-heat-risk');
+            const legend = document.getElementById('heat-risk-legend');
             
-            updateStatus(`Analyzing illegal construction from ${date1} to ${date2}...`);
+            if (checkbox.checked) {
+                // If checked and no layer exists, load it first
+                if (!heatRiskLayer) {
+                    await loadHeatRisk();
+                }
+                
+                // Add layer to map if it exists
+                if (heatRiskLayer) {
+                    heatRiskLayer.addTo(map);
+                    layerItem.classList.add('active');
+                    legend.style.display = 'block';
+                }
+            } else if (heatRiskLayer) {
+                // Remove layer from map
+                map.removeLayer(heatRiskLayer);
+                layerItem.classList.remove('active');
+                legend.style.display = 'none';
+            }
+            
+            updateActiveLayersList();
+        }
+
+        async function loadHeatRisk() {
+            console.log('Loading heat risk map');
+            
+            const opacity = document.getElementById('opacity-heat-risk').value / 100;
+            
+            updateStatus('Loading heat risk map...');
             document.querySelector('.sidebar').classList.add('loading');
             
             try {
-                const response = await fetch('/api/illegal-construction', {
+                const requestData = {
+                    opacity: opacity
+                };
+                
+                console.log('Sending request:', requestData);
+                
+                const response = await fetch('/api/heat-risk', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        date1: date1,  // Pass the dates
-                        date2: date2
-                    })
+                    body: JSON.stringify(requestData)
                 });
                 
                 const result = await response.json();
+                console.log('Received response:', result);
                 
                 if (result.success) {
-                    addLayerToMap('illegal-construction', result.imageUrl, result.bounds);
-                    updateStatus('Illegal construction analysis complete', 'success');
+                    // Remove existing heat risk layer if present
+                    if (heatRiskLayer) {
+                        map.removeLayer(heatRiskLayer);
+                        heatRiskLayer = null;
+                    }
+                    
+                    // Add new layer
+                    const imageBounds = result.bounds || municipalityBounds;
+                    heatRiskLayer = L.imageOverlay(result.imageUrl, imageBounds, {
+                        opacity: 1.0,
+                        interactive: true
+                    });
+                    
+                    // Add to map immediately if checkbox is checked
+                    if (document.getElementById('checkbox-heat-risk').checked) {
+                        heatRiskLayer.addTo(map);
+                        document.getElementById('layer-heat-risk').classList.add('active');
+                        document.getElementById('heat-risk-legend').style.display = 'block';
+                    }
+                    
+                    updateStatus('Heat risk map loaded successfully', 'success');
+                    updateActiveLayersList();
+                    
                 } else {
-                    updateStatus(`${result.error}`, 'error');
-                    document.getElementById('checkbox-illegal').checked = false;
-                    document.getElementById('layer-illegal').classList.remove('active');
+                    updateStatus(`Error: ${result.error}`, 'error');
+                    console.error('Error loading heat risk:', result.error);
+                    // Uncheck the checkbox if loading failed
+                    document.getElementById('checkbox-heat-risk').checked = false;
+                    document.getElementById('layer-heat-risk').classList.remove('active');
                 }
-            } catch (e) {
-                updateStatus(`Error: ${e.message}`, 'error');
-                console.error(e);
-                document.getElementById('checkbox-illegal').checked = false;
-                document.getElementById('layer-illegal').classList.remove('active');
+                
+            } catch (error) {
+                updateStatus(`Error loading heat risk map: ${error.message}`, 'error');
+                console.error('Error:', error);
+                // Uncheck the checkbox if loading failed
+                document.getElementById('checkbox-heat-risk').checked = false;
+                document.getElementById('layer-heat-risk').classList.remove('active');
             } finally {
                 document.querySelector('.sidebar').classList.remove('loading');
+            }
+        }
+
+        async function updateHeatRiskOpacity() {
+            const opacitySlider = document.getElementById('opacity-heat-risk');
+            const opacityValue = document.getElementById('opacity-value-heat-risk');
+            const opacity = opacitySlider.value;
+            
+            opacityValue.textContent = opacity + '%';
+            
+            // If layer is active, reload with new opacity
+            if (heatRiskLayer) {
+                console.log('Reloading with opacity:', opacity);
+                await loadHeatRisk();
             }
         }
         
@@ -1054,6 +1185,13 @@
             });
             layers = {};
             
+            // Also clear heat risk layer
+            if (heatRiskLayer) {
+                map.removeLayer(heatRiskLayer);
+                heatRiskLayer = null;
+                currentHeatRiskScenario = null;
+            }
+            
             // Uncheck all checkboxes
             document.querySelectorAll('.layer-checkbox').forEach(checkbox => {
                 checkbox.checked = false;
@@ -1064,8 +1202,10 @@
                 item.classList.remove('active');
             });
             
-            // Hide NDCI legend
+            // Hide legends
             document.getElementById('ndci-legend').style.display = 'none';
+            document.getElementById('heat-risk-legend').style.display = 'none';
+            document.getElementById('heat-risk-stats').style.display = 'none';
             
             updateActiveLayersList();
             updateStatus('All layers cleared');
@@ -1087,13 +1227,18 @@
         
         // Reorder layers
         function reorderLayers() {
-            const layerOrder = ['RGB', 'NDCI', 'rgb-change-detection'];
+            const layerOrder = ['RGB', 'NDCI', 'rgb-change-detection', 'heat-risk'];
             
             layerOrder.forEach(layerId => {
                 if (layers[layerId]) {
                     layers[layerId].bringToFront();
                 }
             });
+            
+            // Heat risk layer is handled separately
+            if (heatRiskLayer) {
+                heatRiskLayer.bringToFront();
+            }
         }
         
         // Update active layers list
@@ -1102,6 +1247,11 @@
             const activeLayersContent = document.getElementById('active-layers-content');
             
             const activeLayers = Object.keys(layers);
+            
+            // Add heat risk if active
+            if (heatRiskLayer && map.hasLayer(heatRiskLayer)) {
+                activeLayers.push('heat-risk');
+            }
             
             if (activeLayers.length > 0) {
                 // Show active layers list
@@ -1224,23 +1374,12 @@
             }
         }
         
-        // Reload illegal construction layer with current date range
-        async function reloadIllegalConstructionLayer() {
-            try {
-                await detectIllegalConstruction();
-                updateStatus('Illegal construction analysis reloaded successfully', 'success');
-            } catch (error) {
-                console.error('Error reloading illegal construction layer:', error);
-                updateStatus(`Error reloading illegal construction: ${error.message}`, 'error');
-            }
-        }
-        
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', initApp);
         
         // Log startup
         console.log('Alkmaar Municipality Satellite Analysis');
-        console.log('Features: RGB imagery, NDCI water analysis, RGB change detection with BGT integration');
+        console.log('Features: RGB imagery, NDCI water analysis, RGB change detection with BGT integration, Heat Risk Analysis');
         console.log('All date ranges are customizable');
     </script>
 </body>

@@ -1,3 +1,4 @@
+# %%
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,6 +31,7 @@ except ImportError:
         return str(data_file_path)
 
 
+# %%
 def plot_geojson_comparison(
     geojson_filenames,
     column_names,
@@ -175,6 +177,7 @@ def plot_single_geojson(
     plt.show()
 
 
+# %%
 # Test the import and functions
 print("Functions defined successfully!")
 print("You can now use:")

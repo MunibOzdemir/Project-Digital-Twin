@@ -46,3 +46,4 @@ dependencies:
       - flask-cors
       - pillow
       - openpyxl
+      - statsmodels
